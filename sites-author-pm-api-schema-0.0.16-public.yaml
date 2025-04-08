@@ -1,0 +1,2055 @@
+openapi: 3.0.3
+info:
+  title: Page Management API
+  description: |
+    This Data Plane API enables management of Pages within Adobe Experience Manager (AEM) as a Cloud Service.
+
+    In this implementation, Pages need to be associated to a Site via a siteId at creation time. A page cannot be moved
+    to a site of a different type (i.e. `aem` or `aem-edge`) than the one it was associated at creation time.
+
+    All identifiers (PageId, VersionId, TemplateId) are unique, opaque strings specific to the underlying 
+    content repository implementation. These identifiers may differ across environments (e.g. dev, staging, prod) even 
+    when using the same repository implementation. However, identifiers remain stable within the same environment even 
+    when resources are relocated within the same content repository (for example, when a page is moved to a different site).
+
+    The tables below show which operations have been implemented and tested for each API endpoint, 
+    as well as any missing schema fields. Requests to non-implemented operations will return a `501 Not Implemented` 
+    HTTP status code.
+
+    <table>
+    <thead>
+    <tr>
+    <th>Schema</th>
+    <th>Fields not implemented yet</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Page</td>
+    <td>thumbnail<br>metadata<br>_links</td>
+    </tr>
+    </tbody>
+    </table>
+
+    <table>
+    <thead>
+    <tr>
+    <th>Endpoint</th>
+    <th>Operation</th>
+    <th>Site Type<br>aem</th>
+    <th>Site Type<br>aem-edge</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>/pages</td>
+    <td>GET</td>
+    <td>✅</td>
+    <td>✅</td>
+    </tr>
+    <tr>
+    <td></td>
+    <td>POST</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>/pages/byUrl</td>
+    <td>GET</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>/pages/{pageId}</td>
+    <td>GET</td>
+    <td>✅</td>
+    <td>✅</td>
+    </tr>
+    <tr>
+    <td></td>
+    <td>PUT</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td></td>
+    <td>DELETE</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>/pages/{pageId}/content</td>
+    <td>GET</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td></td>
+    <td>PUT</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>/pages/{pageId}/versions</td>
+    <td>GET</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td></td>
+    <td>POST</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>/pages/{pageId}/versions/{versionId}</td>
+    <td>GET</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td></td>
+    <td>DELETE</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>/pages/{pageId}/versions/{versionId}/restore</td>
+    <td>POST</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>/pages/templates</td>
+    <td>GET</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td></td>
+    <td>POST</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>/pages/templates/{templateId}</td>
+    <td>GET</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td></td>
+    <td>DELETE</td>
+    <td></td>
+    <td></td>
+    </tr>
+    </tbody>
+    </table>
+
+    #### Paginated responses
+
+    Operations which return lists of objects use `limit` and `cursor` parameters
+    to control pagination. If the limit is less than 1 or the cursor is invalid, the API
+    replies with a `400` HTTP status.
+
+    A non-empty `cursor` value in a response indicates that the list has more elements
+    than what is being returned.
+
+    To get the next elements, another request must be made with this `cursor` value as a parameter.
+    The API will then return the next elements.
+
+    The `limit` parameter sets the maximum number of elements returned by a single request.  The API may return fewer 
+    elements than requested. Unless otherwise specified by an operation, the default value is `10` 
+    and the maximum is `50` per result page.
+
+    #### Conflicts when saving data
+
+    When saving data, conflicts are handled using
+    [conditional HTTP requests](https://www.rfc-editor.org/rfc/rfc9110.html#conditional.requests)
+
+    If a conflict occurs, the API replies with a `412` HTTP status.
+
+    The conflict must then be resolved by the caller, by either accepting the values from
+    the server, or by overwriting them.
+  version: 0.0.16
+servers:
+  - url: /adobe
+security:
+  - bearerAuth: []
+tags:
+  - name: Pages
+    description: |
+      APIs for managing the Pages of an AEM Site.
+  - name: Page Versions
+    description: |
+      APIs for managing the Versions of Pages.
+  - name: Page Templates
+    description: |
+      APIs for managing the Page Templates of an AEM Site.
+paths:
+  /:
+    get:
+      operationId: pages.list
+      summary: List Pages
+      tags:
+        - Pages
+      parameters:
+        - in: query
+          name: parentPageId
+          description: |
+            The identifier of the parent page. When present, results will only include child pages of the parent page.
+          schema:
+            type: string
+            minLength: 1
+        - in: query
+          name: siteId
+          description: |
+            The identifier of the site. When present, results will only include pages of the specified site.
+          schema:
+            type: string
+            minLength: 1
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      description: |
+        Lists the Pages of a Site, or the children of a specific Page.
+
+        See the _paginated responses_ section in this API's description header
+        for how to control response pagination using the `cursor` and `limit`
+        parameters.
+
+        The optional `limit` query parameter defaults to 50, which is its maximum
+        value.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPagesList'
+              example:
+                cursor: tB3JlovMgoWJohbqyuD9jfluTt6FMwXjLGA5GrOH-mklx22468-p1dcGf6svV6qh
+                items:
+                  - id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                    versionInfo:
+                      label: 1.0-mylabel
+                      description: A description of my version 1.0-mylabel
+                      created:
+                        at: '2025-03-31T16:01:34.582+03:00'
+                        by: admin
+                    siteId: 123e4567-e89b-12d3-a456-426614174000
+                    parentPageId: 123e4567-e89b-12d3-a456-427711000000
+                    path: /articles/travel-2025/travel-to-paris
+                    title: Travel Paris
+                    name: travelparis
+                    description: A culinary expedition to the capital of good taste.
+                    templateId: 123e4567-e89b-12d3-a456-117711000000
+                    tags:
+                      - article
+                      - travel
+                      - food
+                    created:
+                      at: '2025-08-02T16:01:34.582+03:00'
+                      by: admin
+                    modified:
+                      at: '2025-08-04T20:59:34.582-07:00'
+                      by: admin
+                    published:
+                      at: '2025-08-04T23:59:34.582-07:00'
+                      by: admin
+                    thumbnail:
+                      assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+                    metadata:
+                      - name: title
+                        value: Travel Paris
+                        type: string
+                      - name: description
+                        value: A culinary expedition to the capital of good taste.
+                        type: string
+                  - id: caffee6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                    versionInfo:
+                      label: 1.0-mylabel
+                      description: A description of my version 1.0-mylabel
+                      created:
+                        at: '2025-03-31T16:01:34.582+03:00'
+                        by: admin
+                    siteId: 123e4567-e89b-12d3-a456-426614174000
+                    parentPageId: 123e4567-e89b-12d3-a456-427711000000
+                    path: /articles/travel-2025/travel-coffee
+                    title: Best Coffee Spots in the World
+                    name: travelcoffee
+                    description: Whenever you need to boost your productivity, find the best coffee place no matter where you are in the world.
+                    templateId: 123e4567-e89b-12d3-a456-117711000000
+                    tags:
+                      - article
+                      - travel
+                      - food
+                      - coffee
+                    created:
+                      at: '2025-08-02T16:01:34.582+03:00'
+                      by: admin
+                    modified:
+                      at: '2025-08-04T20:59:34.582-07:00'
+                      by: admin
+                    published:
+                      at: '2025-08-04T23:59:34.582-07:00'
+                      by: admin
+                    thumbnail:
+                      assetId: urn:aaid:CAFFEE722d61-d63f-49ac-afa8-1320bf5aa436
+                    metadata:
+                      - name: title
+                        value: Best Coffee Spots in the World with a twist
+                        type: string
+                      - name: description
+                        value: Find your coffee now or never.
+                        type: string
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+    post:
+      operationId: pages.create
+      summary: Create a Page
+      tags:
+        - Pages
+      description: |
+        Creates a Page in a Site.
+
+        The created page will be empty, unless the `templateId` property in the
+        request payload is set to provide initial content.
+
+        Additional values can be set using the "Edit Page" operation, after creating
+        the Page.
+
+        If a Page at the new path already exists, the API replies with a `409` HTTP status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageCreate'
+            example:
+              path: /articles/travel-2025
+              title: Travel Diaries of 2025
+              name: travel-2025
+              description: Immerse yourself in the captivating travel stories of the present.
+              templateId: 123e4567-e89b-12d3-a456-117711000000
+              tags:
+                - articles
+                - travel
+              thumbnail:
+                assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+              metadata:
+                - name: title
+                  value: 'Travel Diaries of 2025: A New Perspective'
+                  type: string
+                - name: description
+                  value: Consume this description on the back of your next camel ride.
+                  type: string
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+              example:
+                id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                siteId: 123e4567-e89b-12d3-a456-426614174000
+                parentPageId: 123e4567-e89b-12d3-a456-427711000000
+                path: /articles/travel-2025
+                title: Travel Diaries of 2025
+                name: travel-2025
+                description: Indulge yourself in the lasted fascinating travel topics.
+                templateId: 123e4567-e89b-12d3-a456-117711000000
+                tags:
+                  - articles
+                  - travel
+                created:
+                  at: '2025-03-31T16:01:34.582+03:00'
+                  by: admin
+                modified:
+                  at: '2025-03-31T16:01:34.582+03:00'
+                  by: admin
+                thumbnail:
+                  assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+                metadata:
+                  - name: title
+                    value: 'Travel Diaries of 2025: A New Perspective'
+                    type: string
+                  - name: description
+                    value: Consume this description on the back of your next camel ride.
+                    type: string
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '409':
+          $ref: '#/components/responses/409_Conflict'
+        '415':
+          $ref: '#/components/responses/415_UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+  /byUrl:
+    get:
+      operationId: pages.byUrl
+      summary: Get Page Properties by URL
+      description: Retrieves the Properties of a Page identified by its fully qualified URL.
+      tags:
+        - Pages
+      parameters:
+        - $ref: '#/components/parameters/url'
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+  /{pageId}:
+    parameters:
+      - $ref: '#/components/parameters/pageId'
+    get:
+      operationId: pages.get
+      summary: Get Page Properties
+      description: Retrieves the Properties of a Page identified by its `pageId`.
+      tags:
+        - Pages
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+    put:
+      operationId: pages.edit
+      summary: Edit Page Properties
+      description: |
+        Edits the properties of a Page identified by its `pageId` and/or moves the Page.
+
+        To move the Page to a new path, set the `path` property to
+        the desired value. If a Page at the new path already exists, the API replies with a `409` HTTP status.
+
+        See also the _conflicts when saving data_ section in this API's description header
+        for how possible conflicts are handled when saving data.
+
+        Edit requests should pass the most recent `ETag` value received from the server.
+      tags:
+        - Pages
+      parameters:
+        - $ref: '#/components/parameters/If-Match'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Page'
+            example:
+              path: /articles/archives/travel-2025
+              title: Travel Diaries of 2025
+              name: travel-2025
+              description: Immerse yourself in the captivating travel stories of the past.
+              templateId: 123e4567-e89b-12d3-a456-117711000000
+              tags:
+                - articles
+                - travel
+              thumbnail:
+                assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+              metadata:
+                - name: title
+                  value: 'Travel Diaries of 2025: A New Perspective'
+                  type: string
+                - name: description
+                  value: Keep on riding that camel.
+                  type: string
+      responses:
+        '200':
+          description: The page was successfully edited.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+              example:
+                id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                versionInfo:
+                  label: 1.0-mylabel
+                  description: A description of my version 1.0-mylabel
+                  created:
+                    at: '2025-03-31T16:01:34.582+03:00'
+                    by: admin
+                siteId: 123e4567-e89b-12d3-a456-426614174000
+                parentPageId: 000e4567-efef-12d3-abcd-427711000123
+                path: /articles/archives/travel-2025
+                title: Travel Diaries of 2025
+                name: travel-2025
+                description: Immerse yourself in the captivating travel stories of the past.
+                templateId: 123e4567-e89b-12d3-a456-117711000000
+                tags:
+                  - articles
+                  - travel
+                created:
+                  at: '2025-03-31T16:01:34.582+03:00'
+                  by: admin
+                modified:
+                  at: '2025-03-31T18:01:34.582+03:00'
+                  by: admin
+                thumbnail:
+                  assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+                metadata:
+                  - name: title
+                    value: 'Travel Diaries of 2025: An old Perspective'
+                    type: string
+                  - name: description
+                    value: Keep on riding that camel.
+                    type: string
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '409':
+          $ref: '#/components/responses/409_Conflict'
+        '412':
+          $ref: '#/components/responses/412_PreconditionFailed'
+        '415':
+          $ref: '#/components/responses/415_UnsupportedMediaType'
+        '428':
+          $ref: '#/components/responses/428_PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+    delete:
+      operationId: pages.delete
+      summary: Delete Page
+      description: |
+        Deletes the page identified by its `pageId`.
+      tags:
+        - Pages
+      parameters:
+        - $ref: '#/components/parameters/If-Match'
+      responses:
+        '204':
+          description: The page was successfully deleted.
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '412':
+          $ref: '#/components/responses/412_PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/428_PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+  /{pageId}/content:
+    parameters:
+      - $ref: '#/components/parameters/pageId'
+    get:
+      operationId: pages.content.get
+      summary: Get Page Content
+      description: Retrieves the content of a Page identified by its `pageId`.
+      tags:
+        - Pages
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/HTML'
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+    put:
+      operationId: pages.content.replace
+      tags:
+        - Pages
+      summary: Replace Page Content
+      description: |
+        Replaces the content of a page identified by its `pageId`.
+
+        See the _conflicts when saving data_ section in this API's description header
+        for how possible conflicts are handled when saving data.
+
+        Edit requests should pass the most recent `ETag` value received from the server.
+      parameters:
+        - $ref: '#/components/parameters/If-Match'
+      requestBody:
+        required: true
+        content:
+          text/html:
+            schema:
+              $ref: '#/components/schemas/HTML'
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/HTML'
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '412':
+          $ref: '#/components/responses/412_PreconditionFailed'
+        '415':
+          $ref: '#/components/responses/415_UnsupportedMediaType'
+        '428':
+          $ref: '#/components/responses/428_PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+  /{pageId}/versions:
+    parameters:
+      - $ref: '#/components/parameters/pageId'
+    get:
+      summary: List Page Versions
+      operationId: pages.versions.list
+      tags:
+        - Page Versions
+      description: |
+        Retrieves the list of Versions of a Page. The latest Version of a Page is the first in the list.
+      parameters:
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPageVersionsList'
+              example:
+                cursor: tB3JlovMgoWJohbqyuD9jfluTt6FMwXjLGA5GrOH-mklx22468-p1dcGf6svV6qh
+                items:
+                  - id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                    versionInfo:
+                      id: 6fa459ea-ee8a-3ca4-894e-db77e160355e
+                      label: 1.1-yourlabel
+                      description: A description of my version 1.1-yourlabel
+                      created:
+                        at: '2025-03-31T19:01:34.582+03:00'
+                        by: admin
+                    siteId: 123e4567-e89b-12d3-a456-426614174000
+                    parentPageId: 123e4567-e89b-12d3-a456-427711000000
+                    path: /wknd/travel-2025/travelparis
+                    title: WKND Travel Paris 1.1-yourlabel
+                    name: travelparis
+                    description: A culinary expedition to the capital of good taste.
+                    templateId: 123e4567-e89b-12d3-a456-117711000000
+                    tags:
+                      - article
+                      - travel
+                      - food
+                    created:
+                      at: '2025-03-31T16:01:34.582+03:00'
+                      by: admin
+                    modified:
+                      at: '2025-03-31T17:01:34.582+03:00'
+                      by: admin
+                    published:
+                      at: '2025-03-31T18:01:34.582+03:00'
+                      by: admin
+                    thumbnail:
+                      assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+                    metadata:
+                      - name: title
+                        value: WKND Travel Paris
+                        type: string
+                      - name: description
+                        value: A culinary expedition to the capital of good taste.
+                        type: string
+                  - id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                    versionInfo:
+                      id: 9b2e5e4e-1e4b-4b0d-9b2e-5e4e1e4b4b0d
+                      label: 1.1-mylabel
+                      description: A description of my version 1.1-mylabel
+                      created:
+                        at: '2025-03-31T18:01:34.582+03:00'
+                        by: admin
+                    siteId: 123e4567-e89b-12d3-a456-426614174000
+                    parentPageId: 123e4567-e89b-12d3-a456-427711000000
+                    path: /wknd/travel-2025/travelparis
+                    title: WKND Travel Paris 1.1-mylabel
+                    name: travelparis
+                    description: A culinary expedition to the capital of good taste.
+                    templateId: 123e4567-e89b-12d3-a456-117711000000
+                    tags:
+                      - article
+                      - travel
+                      - food
+                    created:
+                      at: '2025-03-31T16:01:34.582+03:00'
+                      by: admin
+                    modified:
+                      at: '2025-03-31T17:01:34.582+03:00'
+                      by: admin
+                    published:
+                      at: '2025-03-31T18:01:34.582+03:00'
+                      by: admin
+                    thumbnail:
+                      assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+                    metadata:
+                      - name: title
+                        value: WKND Travel Paris
+                        type: string
+                      - name: description
+                        value: A culinary expedition to the capital of good taste.
+                        type: string
+                  - id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                    versionInfo:
+                      id: f47ac10b-58cc-4372-a567-0e02b2c3d479
+                      label: 1.0-yourlabel
+                      description: A description of my version 1.0-yourlabel
+                      created:
+                        at: '2025-03-31T17:01:34.582+03:00'
+                        by: admin
+                    siteId: 123e4567-e89b-12d3-a456-426614174000
+                    parentPageId: 123e4567-e89b-12d3-a456-427711000000
+                    path: /wknd/travel-2025/travelparis
+                    title: WKND Travel Paris 1.0-yourlabel
+                    name: travelparis
+                    description: A culinary expedition to the capital of good taste.
+                    templateId: 123e4567-e89b-12d3-a456-117711000000
+                    tags:
+                      - article
+                      - travel
+                      - food
+                    created:
+                      at: '2025-03-31T16:01:34.582+03:00'
+                      by: admin
+                    modified:
+                      at: '2025-03-31T17:01:34.582+03:00'
+                      by: admin
+                    published:
+                      at: '2025-03-31T18:01:34.582+03:00'
+                      by: admin
+                    thumbnail:
+                      assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+                    metadata:
+                      - name: title
+                        value: WKND Travel Paris
+                        type: string
+                      - name: description
+                        value: A culinary expedition to the capital of good taste.
+                        type: string
+                  - id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                    versionInfo:
+                      id: 550e8400-e29b-41d4-a716-446655440000
+                      label: 1.0-mylabel
+                      description: A description of my version 1.0-mylabel
+                      created:
+                        at: '2025-03-31T16:01:34.582+03:00'
+                        by: admin
+                    siteId: 123e4567-e89b-12d3-a456-426614174000
+                    parentPageId: 123e4567-e89b-12d3-a456-427711000000
+                    path: /wknd/travel-2025/travelparis
+                    title: WKND Travel Paris 1.0-mylabel
+                    name: travelparis
+                    description: A culinary expedition to the capital of good taste.
+                    templateId: 123e4567-e89b-12d3-a456-117711000000
+                    tags:
+                      - article
+                      - travel
+                      - food
+                    created:
+                      at: '2025-08-02T16:01:34.582+03:00'
+                      by: admin
+                    modified:
+                      at: '2025-08-04T20:59:34.582-07:00'
+                      by: admin
+                    published:
+                      at: '2025-08-04T23:59:34.582-07:00'
+                      by: admin
+                    thumbnail:
+                      assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+                    metadata:
+                      - name: title
+                        value: WKND Travel Paris
+                        type: string
+                      - name: description
+                        value: A culinary expedition to the capital of good taste.
+                        type: string
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+    post:
+      summary: Create a Version for a Page
+      operationId: pages.versions.create
+      tags:
+        - Page Versions
+      description: |
+        Creates a new Version of a Page by copying the Page's current state.
+
+        The `version` label must be unique within the context of the existing Page Versions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionInfoCreate'
+            example:
+              label: 1.0-mylabel
+              description: A description of my version
+      responses:
+        '201':
+          description: The Version was successfully created.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionInfo'
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440000
+                label: 1.0-mylabel
+                description: A description of my version 1.0-mylabel
+                created:
+                  at: '2025-03-31T16:01:34.582+03:00'
+                  by: admin
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '409':
+          $ref: '#/components/responses/409_Conflict'
+        '415':
+          $ref: '#/components/responses/415_UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+  /{pageId}/versions/{versionId}:
+    parameters:
+      - $ref: '#/components/parameters/pageId'
+      - $ref: '#/components/parameters/versionId'
+    get:
+      summary: Get Page Version
+      operationId: pages.versions.get
+      tags:
+        - Page Versions
+      description: |
+        Retrieves the details of a specific Version of a Page.
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+              example:
+                id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                siteId: 123e4567-e89b-12d3-a456-426614174000
+                parentPageId: 123e4567-e89b-12d3-a456-427711000000
+                path: /articles/travel-2025
+                title: Travel Diaries of 2025
+                name: travel-2025
+                description: Indulge yourself in the lasted fascinating travel topics.
+                templateId: 123e4567-e89b-12d3-a456-117711000000
+                tags:
+                  - articles
+                  - travel
+                created:
+                  at: '2025-03-31T16:01:34.582+03:00'
+                  by: admin
+                modified:
+                  at: '2025-03-31T16:01:34.582+03:00'
+                  by: admin
+                thumbnail:
+                  assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+                metadata:
+                  - name: title
+                    value: 'Travel Diaries of 2025: A New Perspective'
+                    type: string
+                  - name: description
+                    value: Consume this description on the back of your next camel ride.
+                    type: string
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+    delete:
+      summary: Delete Page Version
+      operationId: pages.versions.delete
+      tags:
+        - Page Versions
+      description: |
+        Deletes a specific Version of a Page.
+      parameters:
+        - $ref: '#/components/parameters/If-Match'
+      responses:
+        '204':
+          description: The Version was successfully deleted.
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '412':
+          $ref: '#/components/responses/412_PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/428_PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+  /{pageId}/versions/{versionId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/pageId'
+      - $ref: '#/components/parameters/versionId'
+      - $ref: '#/components/parameters/If-Match'
+    post:
+      summary: Restore Page Version
+      operationId: pages.versions.restore
+      tags:
+        - Page Versions
+      description: |
+        Replaces the current state of a Page with the state of a specific Version.
+
+        Since this operation modifies the current state of the Page, it requires the `If-Match` header to be present in the request. The value of the `If-Match` header must match the `ETag` of the Page's current state.
+      responses:
+        '204':
+          $ref: '#/components/responses/204_NoContent'
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '412':
+          $ref: '#/components/responses/412_PreconditionFailed'
+        '415':
+          $ref: '#/components/responses/415_UnsupportedMediaType'
+        '428':
+          $ref: '#/components/responses/428_PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+  /templates:
+    get:
+      operationId: pages.templates.list
+      summary: List Page Templates
+      tags:
+        - Page Templates
+      description: |
+        Retrieves the list of Page Templates, that can be used as initial content
+        for new pages.
+      parameters:
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPageTemplatesList'
+              example:
+                cursor: tB3JlovMgoWJohbqyuD9jfluTt6FMwXjLGA5GrOH-mklx22468-p1dcGf6svV6qh
+                items:
+                  - id: 123e4567-e89b-12d3-a456-117711000000
+                    siteId: 123e4567-e89b-12d3-a456-426614174000
+                    pageId: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                    title: A template travel article
+                    name: travel-article-template
+                    description: Use this to write about awesome travel experiences.
+                  - id: 6fa459ea-ee8a-3ca4-894e-db77e160355e
+                    siteId: 123e4567-e89b-12d3-a456-426614174000
+                    pageId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    title: A template food article
+                    name: food-article-template
+                    description: Use this to write about awesome food experiences.
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+    post:
+      operationId: pages.templates.create
+      summary: Create a Page Template
+      tags:
+        - Page Templates
+      description: |
+        Creates a new Page Template from an existing Page.
+
+        A Template can be used as initial content when creating Pages.
+
+        Only one Template can be created per Page.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageTemplateCreate'
+            example:
+              siteId: 123e4567-e89b-12d3-a456-426614174000
+              pageId: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+              title: A template travel article
+              name: travel-article-template
+              description: Use this to write about awesome travel experiences.
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageTemplate'
+              example:
+                id: 123e4567-e89b-12d3-a456-117711000000
+                siteId: 123e4567-e89b-12d3-a456-426614174000
+                pageId: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                title: A template travel article
+                name: travel-article-template
+                description: Use this to write about awesome travel experiences.
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '409':
+          $ref: '#/components/responses/409_Conflict'
+        '415':
+          $ref: '#/components/responses/415_UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+  /templates/{templateId}:
+    parameters:
+      - $ref: '#/components/parameters/templateId'
+    get:
+      operationId: pages.templates.get
+      summary: Get Page Template
+      tags:
+        - Page Templates
+      description: |
+        Retrieves a Page Template identified by its `templateId`.
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageTemplate'
+              example:
+                id: 123e4567-e89b-12d3-a456-117711000000
+                siteId: 123e4567-e89b-12d3-a456-426614174000
+                pageId: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+                title: A template travel article
+                name: travel-article-template
+                description: Use this to write about awesome travel experiences.
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+    delete:
+      operationId: pages.templates.delete
+      summary: Delete Template
+      tags:
+        - Page Templates
+      description: |
+        Deletes a Page Template.
+
+        Fails with a `409 Conflict` error if the Page Template is currently used by a Page.
+      parameters:
+        - $ref: '#/components/parameters/If-Match'
+      responses:
+        '204':
+          description: The Template was successfully deleted.
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '409':
+          $ref: '#/components/responses/409_Conflict'
+        '412':
+          $ref: '#/components/responses/412_PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/428_PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+components:
+  securitySchemes:
+    bearerAuth:
+      description: |
+        The bearer token to be used for authentication.
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Cursor:
+      description: |
+        A cursor is an opaque string that can be used in API calls which support paginating the response. A non-existent cursor
+        signifies that the returned list does not have more elements.
+      type: string
+      minLength: 1
+    Limit:
+      description: |
+        For a paginated request, this parameter defines the maximum number of items to retrieve.
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 50
+    PageId:
+      description: |
+        The unique identifier of this Page, which stays unchanged as long as the Page exists.
+        This is a read-only field and is generated by the system.
+      type: string
+      minLength: 1
+    VersionId:
+      description: |
+        The unique identifier of the Page Version. This is a read-only field and is generated by the system.
+      type: string
+      minLength: 1
+    AuditInfo:
+      readOnly: true
+      type: object
+      description: Provides audit details about an operation performed by a user (i.e. user and date).
+      properties:
+        at:
+          type: string
+          format: date-time
+          description: Date and time of the operation.
+          example: '2021-01-30T08:30:00Z'
+        by:
+          type: string
+          description: The identifier of the user who performed the operation.
+    VersionInfo:
+      type: object
+      description: Version Information for various versionable resources
+      properties:
+        id:
+          $ref: '#/components/schemas/VersionId'
+          readOnly: true
+        label:
+          type: string
+          description: A label for the version
+        created:
+          $ref: '#/components/schemas/AuditInfo'
+        description:
+          type: string
+          description: A description about the version
+      required:
+        - id
+        - label
+        - created
+    ImageReference:
+      type: object
+      properties:
+        source:
+          type: string
+          format: uri
+          description: |
+            A URI referencing an image from a third-party delivery system. 
+            `source`, `repositoryId` and `assetId` are mutually exclusive.
+        repositoryId:
+          type: string
+          description: |
+            If the image comes from an AEM Assets repository, this property will identify the repository ID. 
+            `source`, `repositoryId` and `assetId` are mutually exclusive.
+          format: uri
+        assetId:
+          type: string
+          pattern: ^urn:aaid:.*$
+          description: |
+            An Asset id that can be consumed via the AEM Assets delivery APIs.
+            `source`, `repositoryId` and `assetId` are mutually exclusive.
+    Field:
+      type: object
+      discriminator:
+        propertyName: type
+        mapping:
+          string: '#/components/schemas/StringField'
+          date: '#/components/schemas/DateField'
+          long-number: '#/components/schemas/LongNumberField'
+          float-number: '#/components/schemas/FloatNumberField'
+          boolean: '#/components/schemas/BooleanField'
+          imagereference: '#/components/schemas/ImageReferenceField'
+          array_of_strings: '#/components/schemas/ArrayOfStringsField'
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: The name of the field.
+        type:
+          $ref: '#/components/schemas/FieldType'
+      required:
+        - name
+        - type
+        - value
+    StringField:
+      description: A field for representing string values.
+      allOf:
+        - $ref: '#/components/schemas/Field'
+        - type: object
+          properties:
+            value:
+              type: string
+              description: The string value of the field.
+    DateField:
+      description: A field for representing date values.
+      allOf:
+        - $ref: '#/components/schemas/Field'
+        - type: object
+          properties:
+            value:
+              type: string
+              format: date
+              description: The date value of the field.
+    LongNumberField:
+      description: A field for representing long number values.
+      allOf:
+        - $ref: '#/components/schemas/Field'
+        - type: object
+          properties:
+            value:
+              type: integer
+              format: int64
+              description: The long value of the field.
+    FloatNumberField:
+      description: A field for representing fractional (double-precision) number values.
+      allOf:
+        - $ref: '#/components/schemas/Field'
+        - type: object
+          properties:
+            value:
+              type: number
+              format: double
+              description: The double value of the field.
+    BooleanField:
+      description: A field for representing boolean values.
+      allOf:
+        - $ref: '#/components/schemas/Field'
+        - type: object
+          properties:
+            value:
+              type: boolean
+              description: The boolean value of the field.
+    ImageReferenceField:
+      description: A field for representing Image Reference values.
+      allOf:
+        - $ref: '#/components/schemas/Field'
+        - type: object
+          properties:
+            value:
+              $ref: '#/components/schemas/ImageReference'
+    ArrayOfStringsField:
+      description: A field for representing an array of string values.
+      allOf:
+        - $ref: '#/components/schemas/Field'
+        - type: object
+          properties:
+            value:
+              type: array
+              description: An array of string values.
+              items:
+                type: string
+    FieldType:
+      type: string
+      description: Type of meta data entry.
+      enum:
+        - string
+        - date
+        - long-number
+        - float-number
+        - boolean
+        - imagereference
+        - array_of_strings
+    Page:
+      type: object
+      description: Page of a website.
+      properties:
+        id:
+          $ref: '#/components/schemas/PageId'
+          readOnly: true
+        versionInfo:
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/VersionInfo'
+        siteId:
+          type: string
+          description: |
+            The id of the Site in which the Page will be created.
+          readOnly: true
+        parentPageId:
+          type: string
+          description: |
+            The id of the parent Page. An empty parent page Id means that the Page is at the root of its Site.
+          readOnly: true
+        path:
+          type: string
+          description: |
+            The absolute path of the Page within its Site.
+            Must start with a slash and can only contain lowercase letters, numbers, and hyphens.
+            The path must be unique within its Site.
+          format: uri
+          minLength: 2
+          pattern: ^(\/(?!-)[a-z0-9-]*[a-z0-9])+$
+        title:
+          type: string
+          description: The title of the Page.
+          minLength: 1
+        description:
+          type: string
+          description: The description of the Page.
+        templateId:
+          readOnly: true
+          type: string
+          description: |
+            The id of the template to be used for the initial content of the Page.
+            The corresponding template must be available in the Site's template store.
+        tags:
+          type: array
+          description: The tags of the Page, which can be used to categorize the page.
+          items:
+            type: string
+        thumbnail:
+          description: The thumbnail of the Page.
+          allOf:
+            - $ref: '#/components/schemas/ImageReference'
+        metadata:
+          type: array
+          description: |
+            The meta data of the Page. This array contains the usual SERP entries like web title & description, keywords, open graph fields etc.
+            It can also contain custom meta data.
+            The implementation can decide to use some of the page properties (like `title` or `description`) as default values for meta data
+            that is not explicitly set.
+          items:
+            $ref: '#/components/schemas/Field'
+        created:
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/AuditInfo'
+        modified:
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/AuditInfo'
+        published:
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/AuditInfo'
+        _links:
+          type: object
+          properties:
+            self:
+              type: object
+              properties:
+                href:
+                  type: string
+                  format: uri
+                  description: The URL of the page.
+            edit:
+              type: object
+              properties:
+                href:
+                  type: string
+                  format: uri
+                  description: |
+                    Link to edit the page. The client should redirect the browser to the specified `href` so that the user can
+                    edit the page.
+      required:
+        - id
+        - siteId
+        - path
+        - title
+      example:
+        id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+        siteId: 123e4567-e89b-12d3-a456-426614174000
+        parentPageId: 123e4567-e89b-12d3-a456-427711000000
+        path: /articles/travel-2025
+        title: Travel Diaries of 2025
+        name: travel-2025
+        description: Indulge yourself in the lasted fascinating travel topics.
+        templateId: 123e4567-e89b-12d3-a456-117711000000
+        tags:
+          - articles
+          - travel
+        created:
+          at: '2025-03-31T16:01:34.582+03:00'
+          by: admin
+        modified:
+          at: '2025-03-31T16:01:34.582+03:00'
+          by: admin
+        thumbnail:
+          assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+        metadata:
+          - name: title
+            value: 'Travel Diaries of 2025: A New Perspective'
+            type: string
+          - name: description
+            value: Consume this description on the back of your next camel ride.
+            type: string
+    PaginatedPagesList:
+      description: |
+        Paginated collection of Pages.
+      type: object
+      properties:
+        items:
+          description: List of Pages
+          type: array
+          items:
+            $ref: '#/components/schemas/Page'
+        cursor:
+          $ref: '#/components/schemas/Cursor'
+      required:
+        - items
+    ProblemDetails:
+      description: A [RFC7807](https://www.rfc-editor.org/rfc/rfc7807) JSON Problem Details Object
+      type: object
+      properties:
+        type:
+          type: string
+          description: A URI reference [RFC3986](https://www.rfc-editor.org/rfc/rfc3986) to a URL, which, when dereferenced, provides human readable documentation for the problem type.  The problem type may be equivalent to the `status` or may be a "sub-type".  This URI is not intended to be parsed by clients; rather it should be treated as an opaque string that uniquely represents the error condition as-is.
+          minLength: 1
+        title:
+          type: string
+          description: A short, human-readable summary of the problem type.
+          minLength: 1
+        status:
+          type: integer
+          description: The HTTP status code ([RFC9110], Section 15) generated by the origin server for this occurrence of the problem.
+          minLength: 1
+        detail:
+          type: string
+          description: A human-readable explanation specific to this occurrence of the problem.
+          minLength: 1
+        requestId:
+          type: string
+          description: |
+            A unique identifier that is assigned to the request, either by the API caller or by the service itself.
+          minLength: 1
+      required:
+        - type
+        - title
+        - status
+        - detail
+    PageCreate:
+      type: object
+      description: |
+        Request payload to create a new Page in an AEM Site. `siteId` is mandatory and if parentPageId is specified 
+        it must be located in the same site. Otherwise, a `400` HTTP status is returned.
+      properties:
+        siteId:
+          type: string
+          description: |
+            The id of the Site in which the Page will be created.
+        path:
+          type: string
+          description: |
+            The path of the Page within the hierarchy of Pages in the same Site. This is freely definable, even with multiple 
+            path segments, and independent of the parentPageId relationship. 
+            It must start with a slash and may only contain lowercase letters, numbers, and hyphens.
+          format: uri
+          minLength: 2
+          pattern: ^(\/(?!-)[a-z0-9-]*[a-z0-9])+$
+        title:
+          type: string
+          description: The title of the Page. Can be used in a browser's title bar.
+          minLength: 1
+        description:
+          type: string
+          description: The description of the Page.
+        templateId:
+          type: string
+          description: |
+            The template to be used for the Page. The template must be available in the Site's template store.
+        parentPageId:
+          type: string
+          description: |
+            The id of the parent Page. This can be empty for root level pages.
+        tags:
+          type: array
+          description: The tags of the Page. Usually used to categorize the page for authoring purposes.
+          items:
+            type: string
+        thumbnail:
+          description: The thumbnail of the Page.
+          allOf:
+            - $ref: '#/components/schemas/ImageReference'
+        model:
+          type: string
+          description: The model identifier for the page structure and metadata. Depending on the page `type` this might be a string identifier, keyword or content model path.
+        metadata:
+          type: array
+          description: |
+            The meta data of the Page. This array contains the usual SERP entries like web title & description, keywords, open graph fields etc.
+            It can also contain custom meta data.
+            The implementation can decide to use some of the page properties (like `title` or `description`) as default values for meta data
+            that is not explicitly set.
+          items:
+            $ref: '#/components/schemas/Field'
+      required:
+        - siteId
+        - path
+        - title
+    HTML:
+      type: string
+      description: |
+        The HTML content of the Page represented by the page's body `<body>` tag.
+      minLength: 1
+      example: <body><h1>Hello World</h1></body>
+    PageVersion:
+      type: object
+      description: A Version of a Page of a website.
+      allOf:
+        - $ref: '#/components/schemas/Page'
+      required:
+        - id
+        - siteId
+        - path
+        - title
+        - versionInfo
+      example:
+        id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
+        siteId: 123e4567-e89b-12d3-a456-426614174000
+        parentPageId: 123e4567-e89b-12d3-a456-427711000000
+        path: /articles/travel-2025
+        title: Travel Diaries of 2025
+        name: travel-2025
+        description: Indulge yourself in the lasted fascinating travel topics.
+        templateId: 123e4567-e89b-12d3-a456-117711000000
+        tags:
+          - articles
+          - travel
+        created:
+          at: '2025-03-31T16:01:34.582+03:00'
+          by: admin
+        modified:
+          at: '2025-03-31T16:01:34.582+03:00'
+          by: admin
+        thumbnail:
+          assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5aa436
+        metadata:
+          - name: title
+            value: 'Travel Diaries of 2025: A New Perspective'
+            type: string
+          - name: description
+            value: Consume this description on the back of your next camel ride.
+            type: string
+    PaginatedPageVersionsList:
+      description: |
+        Paginated collection of Versions of Pages.
+      type: object
+      properties:
+        items:
+          description: List of Versions of Pages
+          type: array
+          items:
+            $ref: '#/components/schemas/PageVersion'
+        cursor:
+          $ref: '#/components/schemas/Cursor'
+      required:
+        - items
+    VersionInfoCreate:
+      type: object
+      description: Version Information for various versionable resources
+      properties:
+        label:
+          type: string
+          description: A label for the version
+        created:
+          $ref: '#/components/schemas/AuditInfo'
+        description:
+          type: string
+          description: A description about the version
+      required:
+        - label
+        - created
+    PageTemplateId:
+      description: |
+        description: The unique identifier of the Page Template. This is a read-only field and is generated by the system.
+      type: string
+      minLength: 1
+    PageTemplate:
+      type: object
+      description: |
+        A Page Template provides initial content and structure for
+        new pages that an author or authoring system can create.
+      properties:
+        id:
+          $ref: '#/components/schemas/PageTemplateId'
+          readOnly: true
+        siteId:
+          type: string
+          description: |
+            The id of the Site to which the template belongs.
+        pageId:
+          type: string
+          description: |
+            The id of the page that served as the template.
+        title:
+          type: string
+          description: The human-readable title of the template.
+          minLength: 1
+        name:
+          description: The template's name.
+          type: string
+          minLength: 1
+        description:
+          description: |
+            A human-readable description that provides information about the template's purpose.
+          type: string
+          minLength: 1
+      required:
+        - id
+        - siteId
+        - pageId
+        - title
+    PaginatedPageTemplatesList:
+      description: |
+        Paginated collection of Page Templates.
+      type: object
+      properties:
+        items:
+          description: List of Page Templates
+          type: array
+          items:
+            $ref: '#/components/schemas/PageTemplate'
+        cursor:
+          $ref: '#/components/schemas/Cursor'
+      required:
+        - items
+    PageTemplateCreate:
+      type: object
+      description: |
+        A Page Template provides initial content and structure for
+        new pages that an author or authoring system can create.
+      properties:
+        siteId:
+          type: string
+          description: |
+            The id of the Site to which the template belongs.
+        pageId:
+          type: string
+          description: |
+            The id of an existing page that serves as the template.
+        title:
+          type: string
+          description: The human-readable title of the template.
+          minLength: 1
+        name:
+          description: The template's name.
+          type: string
+          minLength: 1
+        description:
+          description: |
+            A human-readable description that provides information about the template's purpose.
+          type: string
+          minLength: 1
+      required:
+        - siteId
+        - pageId
+        - title
+  parameters:
+    cursor:
+      in: query
+      name: cursor
+      description: |
+        For a paginated request, this parameter defines the cursor from which to retrieve the next set of items.
+      schema:
+        $ref: '#/components/schemas/Cursor'
+    limit:
+      in: query
+      name: limit
+      description: |
+        For a paginated request, this parameter defines the maximum number of items to retrieve.
+      schema:
+        $ref: '#/components/schemas/Limit'
+    url:
+      in: query
+      name: url
+      description: Fully qualified URL of the object to retrieve
+      required: true
+      schema:
+        type: string
+        format: uri
+    pageId:
+      in: path
+      name: pageId
+      description: |
+        Identifies a Page by its Id
+      required: true
+      schema:
+        $ref: '#/components/schemas/PageId'
+    If-Match:
+      name: If-Match
+      description: |
+        The `If-Match` header field makes the request method conditional on the recipient origin server either having at least
+        one current representation of the target resource, when the field value is "*", or having a current representation of
+        the target resource that has an entity tag matching a member of the list of entity tags provided in the field value.
+
+        For more details, please head over to [RFC9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-if-match).
+      in: header
+      required: true
+      schema:
+        type: string
+        description: The value of an `ETag` received for a previous `HEAD` or `GET` request to this resource.
+    versionId:
+      in: path
+      name: versionId
+      description: |
+        Identifies a Page Version by its Id
+      required: true
+      schema:
+        $ref: '#/components/schemas/VersionId'
+    templateId:
+      in: path
+      name: templateId
+      description: |
+        Identifies a template by its Id
+      required: true
+      schema:
+        $ref: '#/components/schemas/PageTemplateId'
+  responses:
+    400_BadRequest:
+      description: Bad Request. The Problem Details object will provide more information about the exact cause.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 400
+                  title:
+                    type: string
+                    default: Bad Request
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/bad_request
+            title: Bad Request
+            status: 400
+            detail: Bad request, please check that you have provided the correct parameters and that they are valid.
+    401_Unauthorized:
+      description: Unauthorized
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 401
+                  title:
+                    type: string
+                    default: Unauthorized
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/unauthorized
+            title: Unauthorized
+            status: 401
+            detail: The request did not contain a valid Authorization header.
+    403_Forbidden:
+      description: Forbidden
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 403
+                  title:
+                    type: string
+                    default: Forbidden
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/forbidden
+            title: Forbidden
+            status: 403
+            detail: The credentials provided do not have sufficient permissions to access this resource.
+    406_Unacceptable:
+      description: |
+        Unacceptable. indicates that the target resource does not have a current representation that would be acceptable to the user agent,
+        according to the proactive negotiation header fields received in the request.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  title:
+                    type: string
+                    example: Unacceptable
+                  status:
+                    type: integer
+                    default: 406
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/not_acceptable
+            title: Not Acceptable
+            status: 406
+            detail: |
+              "The target resource does not have a current representation that would be acceptable to the user agent, 
+              according to the proactive negotiation header fields received in the request."
+    500_InternalServerError:
+      description: |
+        The server encountered an unexpected error. Retrying the request after a certain time could help.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 500
+                  title:
+                    type: string
+                    default: Internal Server Error
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/internal_server_error
+            title: Internal Server Error
+            status: 500
+            detail: The server encountered an unexpected condition that prevented it from fulfilling the request.
+    409_Conflict:
+      description: Conflict
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 409
+                  title:
+                    type: string
+                    default: Conflict
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/conflict
+            title: Conflict
+            status: 409
+            detail: The current state of the resource on the server is incompatible with your request.
+    415_UnsupportedMediaType:
+      description: |
+        Unsupported Media Type. When provided as a response to a `PATCH` request,
+        the response will provide an `Accept-Patch` response header to notify
+        the client what patch document media types are supported.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  title:
+                    type: string
+                    example: Unsupported Media Type
+                  status:
+                    type: integer
+                    default: 415
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/unsupported_media_type
+            title: Unsupported Media Type
+            status: 415
+            detail: This request is not acceptable because the payload is in an unsupported format.
+    404_NotFound:
+      description: Not Found
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 404
+                  title:
+                    type: string
+                    default: Not Found
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/not_found
+            title: Not Found
+            status: 404
+            detail: The requested resource could not be found.
+    412_PreconditionFailed:
+      description: Precondition Failed
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  title:
+                    type: string
+                    default: Precondition Failed
+                  status:
+                    type: integer
+                    default: 412
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/precondition_failed
+            title: Precondition Failed
+            status: 412
+            detail: The provided conditional header was not fulfilled.
+    428_PreconditionRequired:
+      description: Precondition Required
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  title:
+                    type: string
+                    default: Precondition Required
+                  status:
+                    type: integer
+                    default: 428
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/precondition_required
+            title: Precondition Required
+            status: 428
+            detail: This operation requires the use of a conditional header.
+    204_NoContent:
+      description: No Content
+  headers:
+    Location:
+      schema:
+        type: string
+        format: uri
+      description: |
+        The `Location` header field is used in some responses to refer to a specific resource in relation to the response.
+        The type of relationship is defined by the combination of request method and status code semantics.
+
+        For more details, please head over to [RFC9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-location).
+      required: true
+    ETag:
+      schema:
+        type: string
+      description: |
+        The `ETag` field in a response provides the current entity tag for the selected representation, as determined at the
+        conclusion of handling the request. An entity tag is an opaque validator for differentiating between multiple
+        representations of the same resource, regardless of whether those multiple representations are due to resource state
+        changes over time, content negotiation resulting in multiple representations being valid at the same time, or both.
+        An entity tag consists of an opaque quoted string, possibly prefixed by a weakness indicator.
+
+        For more details, please head over to [RFC9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-etag).
+      required: true

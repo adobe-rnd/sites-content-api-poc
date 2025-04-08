@@ -1,0 +1,861 @@
+openapi: 3.0.3
+info:
+  title: Sites Management API
+  description: |
+    This Data Plane API enables management of Sites within Adobe Experience Manager (AEM) as a Cloud Service.
+
+    Sites are categorized as either `aem` or `aem-edge` types. Operations cannot cross this type boundary; 
+    any attempt to do so will result in a `400 Bad Request` HTTP status code.
+
+    All siteId identifiers are unique, opaque strings specific to the underlying 
+    content repository implementation. These identifiers may differ across environments (e.g. dev, staging, prod) even 
+    when using the same repository implementation. However, identifiers remain stable within the same environment.
+
+    The tables below show which operations have been implemented and tested for each API endpoint, 
+    as well as any missing schema fields. Requests to non-implemented operations will return a `501 Not Implemented` 
+    HTTP status code.
+
+    <table>
+    <thead>
+    <tr>
+    <th>Schema</th>
+    <th>Fields not implemented yet</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>Sites</td>
+    <td>thumbnail<br>config</td>
+    </tr>
+    </tbody>
+    </table>
+
+    <table>
+    <thead>
+    <tr>
+    <th>Endpoint</th>
+    <th>Operation</th>
+    <th>Site Type<br>aem</th>
+    <th>Site Type<br>aem-edge</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td>/sites</td>
+    <td>GET</td>
+    <td>✅</td>
+    <td>✅</td>
+    </tr>
+    <tr>
+    <td></td>
+    <td>POST</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>/sites/byUrl</td>
+    <td>GET</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td>/sites/{siteId}</td>
+    <td>GET</td>
+    <td>✅</td>
+    <td>✅</td>
+    </tr>
+    <tr>
+    <td></td>
+    <td>PUT</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td></td>
+    <td>DELETE</td>
+    <td></td>
+    <td></td>
+    </tr>
+    <tr>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    </tr>
+    </tbody>
+    </table>
+
+    #### Paginated responses
+
+    Operations which return lists of objects use `limit` and `cursor` parameters
+    to control pagination. If the limit is less than 1 or the cursor is invalid, the API
+    replies with a `400` HTTP status.
+
+    A non-empty `cursor` value in a response indicates that the list has more elements
+    than what is being returned.
+
+    To get the next elements, another request must be made with this `cursor` value as a parameter.
+    The API will then return the next elements.
+
+    The `limit` parameter sets the maximum number of elements returned by a single request.  The API may return fewer 
+    elements than requested. Unless otherwise specified by an operation, the default value is `10` 
+    and the maximum is `50` per result page.
+
+    #### Conflicts when saving data
+
+    When saving data, conflicts are handled using
+    [conditional HTTP requests](https://www.rfc-editor.org/rfc/rfc9110.html#conditional.requests)
+
+    If a conflict occurs, the API replies with a `412` HTTP status.
+
+    The conflict must then be resolved by the caller, by either accepting the values from
+    the server, or by overwriting them.
+  version: 0.0.16
+servers:
+  - url: /adobe
+security:
+  - bearerAuth: []
+tags:
+  - name: Sites
+    description: |
+      APIs for managing the AEM Sites of an organization.
+paths:
+  /:
+    get:
+      summary: List available Sites
+      operationId: sites.list
+      description: |
+        Retrieves a list of Sites that the current user has access to.
+
+        See the _paginated responses_ section in this API's description header
+        for how to control response pagination using the `cursor` and `limit`
+        parameters.
+      tags:
+        - Sites
+      parameters:
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: The list of available Sites was successfully returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSitesList'
+              example:
+                cursor: tB3JlovMgoWJohbqyuD9jfluTt6FMwXjLGA5GrOH-mklx22468-p1dcGf6svV6qh
+                items:
+                  - id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4e
+                    title: WKND Adventures and Travel
+                    description: Lots of adventures and travel
+                    name: wknd
+                    type: aem-edge
+                  - id: f3a2a232-4c3b-4f8a-9b2e-8f2b6a1d3e4e
+                    title: ACME Foods
+                    description: Lots of food and drinks
+                    name: acmefoods
+                    type: aem
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+    post:
+      summary: Create a Site
+      operationId: sites.create
+      description: |
+        Creates a new AEM Site.
+
+        The `title` is required to create a Site.
+
+        The `name` can be omitted to generate a name automatically from the `title`.
+
+        Additional values can be set using the "Edit Site" operation, after creating
+        the Site.
+
+        If a Site with the title already exists, the API replies with a `409` HTTP status.
+      tags:
+        - Sites
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteCreate'
+            example:
+              title: WKND Adventures and Travel
+              description: Lots of adventures and travel
+              name: wknd
+              type: aem-edge
+      responses:
+        '201':
+          description: The site was created successfully.
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+              example:
+                id: 123e4567-e89b-12d3-a456-426614174000
+                title: WKND Adventures and Travel
+                description: Lots of adventures and travel
+                name: wknd
+                type: aem-edge
+                created:
+                  at: '2025-03-31T16:01:34.582+03:00'
+                  by: admin
+                modified:
+                  at: '2025-03-31T16:01:34.582+03:00'
+                  by: admin
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '409':
+          $ref: '#/components/responses/409_Conflict'
+        '415':
+          $ref: '#/components/responses/415_UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+  /{siteId}:
+    parameters:
+      - $ref: '#/components/parameters/siteId'
+    get:
+      operationId: sites.get
+      summary: Get Site
+      description: |
+        Retrieves all the details of a Site identified by its `siteId`.
+      tags:
+        - Sites
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+    put:
+      operationId: sites.edit
+      summary: Edit Site
+      description: |
+        Edits the Site identified by its `siteId`.
+
+        See the _conflicts when saving data_ section in this API's description header
+        for how possible conflicts are handled when saving data.
+
+        Edit requests should pass the most recent `ETag` value received from the server.
+      tags:
+        - Sites
+      parameters:
+        - $ref: '#/components/parameters/If-Match'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Site'
+            example:
+              title: WKND Changed
+              description: WKND new description
+              thumbnail:
+                assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5faaaa
+      responses:
+        '200':
+          description: The site was successfully edited.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+              example:
+                id: 123e4567-e89b-12d3-a456-426614174000
+                title: WKND Changed
+                description: WKND new description
+                name: wknd
+                type: aem-edge
+                thumbnail:
+                  assetId: urn:aaid:scEU93722d61-d63f-49ac-afa8-1320bf5faaaa
+                created:
+                  at: '2025-03-31T16:01:34.582+03:00'
+                  by: admin
+                modified:
+                  at: '2025-03-31T18:01:34.582+03:00'
+                  by: admin
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '409':
+          $ref: '#/components/responses/409_Conflict'
+        '412':
+          $ref: '#/components/responses/412_PreconditionFailed'
+        '415':
+          $ref: '#/components/responses/415_UnsupportedMediaType'
+        '428':
+          $ref: '#/components/responses/428_PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+    delete:
+      operationId: sites.delete
+      summary: Delete Site
+      description: |
+        Deletes a Site, together with all its content and associated configurations.
+      tags:
+        - Sites
+      parameters:
+        - $ref: '#/components/parameters/If-Match'
+      responses:
+        '204':
+          $ref: '#/components/responses/204_NoContent'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '403':
+          $ref: '#/components/responses/403_Forbidden'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '412':
+          $ref: '#/components/responses/412_PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/428_PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+  /byUrl:
+    get:
+      operationId: sites.byUrl
+      summary: Get Site by URL
+      description: |
+        Retrieves all the details of a Site identified by its fully qualified URL.
+      tags:
+        - Sites
+      parameters:
+        - $ref: '#/components/parameters/url'
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '400':
+          $ref: '#/components/responses/400_BadRequest'
+        '401':
+          $ref: '#/components/responses/401_Unauthorized'
+        '404':
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+          $ref: '#/components/responses/406_Unacceptable'
+        '500':
+          $ref: '#/components/responses/500_InternalServerError'
+components:
+  securitySchemes:
+    bearerAuth:
+      description: |
+        The bearer token to be used for authentication.
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Cursor:
+      description: |
+        A cursor is an opaque string that can be used in API calls which support paginating the response. A non-existent cursor
+        signifies that the returned list does not have more elements.
+      type: string
+      minLength: 1
+    Limit:
+      description: |
+        For a paginated request, this parameter defines the maximum number of items to retrieve.
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 50
+    SiteId:
+      description: |
+        The unique identifier of the Site. This is a read-only field and is generated by the system.
+      type: string
+      minLength: 1
+    AuditInfo:
+      readOnly: true
+      type: object
+      description: Provides audit details about an operation performed by a user (i.e. user and date).
+      properties:
+        at:
+          type: string
+          format: date-time
+          description: Date and time of the operation.
+          example: '2021-01-30T08:30:00Z'
+        by:
+          type: string
+          description: The identifier of the user who performed the operation.
+    ImageReference:
+      type: object
+      properties:
+        source:
+          type: string
+          format: uri
+          description: |
+            A URI referencing an image from a third-party delivery system. 
+            `source`, `repositoryId` and `assetId` are mutually exclusive.
+        repositoryId:
+          type: string
+          description: |
+            If the image comes from an AEM Assets repository, this property will identify the repository ID. 
+            `source`, `repositoryId` and `assetId` are mutually exclusive.
+          format: uri
+        assetId:
+          type: string
+          pattern: ^urn:aaid:.*$
+          description: |
+            An Asset id that can be consumed via the AEM Assets delivery APIs.
+            `source`, `repositoryId` and `assetId` are mutually exclusive.
+    Site:
+      type: object
+      description: An AEM Site, managed, authored and served by AEM as a Cloud Service.
+      properties:
+        id:
+          $ref: '#/components/schemas/SiteId'
+          readOnly: true
+        title:
+          type: string
+          description: |
+            The title of the Site.
+          minLength: 1
+        description:
+          type: string
+          description: A human-readable description that provides information about the Site.
+        name:
+          readOnly: true
+          type: string
+          description: |
+            The name of the Site, which has to be unique within the organization.
+
+            The pattern that implementations must use is: `/^[\p{Letter}\p{Mark}0-9\-_\.]+$/u`. OpenAPI 3.0.3 does not allow
+            unicode character classes in patterns.
+          minLength: 1
+        created:
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/AuditInfo'
+        modified:
+          readOnly: true
+          allOf:
+            - $ref: '#/components/schemas/AuditInfo'
+        thumbnail:
+          description: The thumbnail of the Site.
+          allOf:
+            - $ref: '#/components/schemas/ImageReference'
+        type:
+          readOnly: true
+          type: string
+          description: The type of the Site. Provides information on the CMS used to manage the site.
+        config:
+          type: object
+          description: The configuration of the Site. This object can contain any custom fields.
+          additionalProperties: true
+      required:
+        - id
+        - title
+      example:
+        id: 123e4567-e89b-12d3-a456-426614174000
+        title: WKND Adventures and Travel
+        description: Lots of adventures and travel
+        name: wknd
+        type: aem-edge
+        created:
+          at: '2025-03-31T16:01:34.582+03:00'
+          by: admin
+        modified:
+          at: '2025-03-31T16:01:34.582+03:00'
+          by: admin
+    PaginatedSitesList:
+      description: |
+        Paginated collection of Sites.
+      type: object
+      properties:
+        items:
+          description: List of Sites
+          type: array
+          items:
+            $ref: '#/components/schemas/Site'
+        cursor:
+          $ref: '#/components/schemas/Cursor'
+      required:
+        - items
+    ProblemDetails:
+      description: A [RFC7807](https://www.rfc-editor.org/rfc/rfc7807) JSON Problem Details Object
+      type: object
+      properties:
+        type:
+          type: string
+          description: A URI reference [RFC3986](https://www.rfc-editor.org/rfc/rfc3986) to a URL, which, when dereferenced, provides human readable documentation for the problem type.  The problem type may be equivalent to the `status` or may be a "sub-type".  This URI is not intended to be parsed by clients; rather it should be treated as an opaque string that uniquely represents the error condition as-is.
+          minLength: 1
+        title:
+          type: string
+          description: A short, human-readable summary of the problem type.
+          minLength: 1
+        status:
+          type: integer
+          description: The HTTP status code ([RFC9110], Section 15) generated by the origin server for this occurrence of the problem.
+          minLength: 1
+        detail:
+          type: string
+          description: A human-readable explanation specific to this occurrence of the problem.
+          minLength: 1
+        requestId:
+          type: string
+          description: |
+            A unique identifier that is assigned to the request, either by the API caller or by the service itself.
+          minLength: 1
+      required:
+        - type
+        - title
+        - status
+        - detail
+    SiteCreate:
+      title: Create Site
+      description: Request payload to create a new AEM Site.
+      type: object
+      properties:
+        title:
+          type: string
+          description: |
+            The descriptive title of the Site.
+          minLength: 1
+        type:
+          type: string
+          description: |
+            The type of the Site. Once created it cannot be changed later. The value must be one of the following:
+            - `aem`
+            - `aem-edge`
+          minLength: 1
+        name:
+          type: string
+          description: |
+            The name of the Site, which must be unique within the organization.
+
+            It will be part of the Site's URL and serves as its primary identifier.
+
+            If a `name` is not provided, it will be generated from the Site's `title`
+            according to the validity rule shown below.
+
+            To be valid, the `name` must match this expression:
+
+            > `/^[\p{Letter}\p{Mark}0-9\-_\.]+$/u`
+
+            OpenAPI 3.0.3 does not allow Unicode character classes in patterns.
+          minLength: 1
+      required:
+        - title
+        - type
+  parameters:
+    cursor:
+      in: query
+      name: cursor
+      description: |
+        For a paginated request, this parameter defines the cursor from which to retrieve the next set of items.
+      schema:
+        $ref: '#/components/schemas/Cursor'
+    limit:
+      in: query
+      name: limit
+      description: |
+        For a paginated request, this parameter defines the maximum number of items to retrieve.
+      schema:
+        $ref: '#/components/schemas/Limit'
+    siteId:
+      in: path
+      name: siteId
+      description: |
+        Identifies a Site by its Id
+      required: true
+      schema:
+        $ref: '#/components/schemas/SiteId'
+    If-Match:
+      name: If-Match
+      description: |
+        The `If-Match` header field makes the request method conditional on the recipient origin server either having at least
+        one current representation of the target resource, when the field value is "*", or having a current representation of
+        the target resource that has an entity tag matching a member of the list of entity tags provided in the field value.
+
+        For more details, please head over to [RFC9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-if-match).
+      in: header
+      required: true
+      schema:
+        type: string
+        description: The value of an `ETag` received for a previous `HEAD` or `GET` request to this resource.
+    url:
+      in: query
+      name: url
+      description: Fully qualified URL of the object to retrieve
+      required: true
+      schema:
+        type: string
+        format: uri
+  responses:
+    400_BadRequest:
+      description: Bad Request. The Problem Details object will provide more information about the exact cause.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 400
+                  title:
+                    type: string
+                    default: Bad Request
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/bad_request
+            title: Bad Request
+            status: 400
+            detail: Bad request, please check that you have provided the correct parameters and that they are valid.
+    401_Unauthorized:
+      description: Unauthorized
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 401
+                  title:
+                    type: string
+                    default: Unauthorized
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/unauthorized
+            title: Unauthorized
+            status: 401
+            detail: The request did not contain a valid Authorization header.
+    403_Forbidden:
+      description: Forbidden
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 403
+                  title:
+                    type: string
+                    default: Forbidden
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/forbidden
+            title: Forbidden
+            status: 403
+            detail: The credentials provided do not have sufficient permissions to access this resource.
+    406_Unacceptable:
+      description: |
+        Unacceptable. indicates that the target resource does not have a current representation that would be acceptable to the user agent,
+        according to the proactive negotiation header fields received in the request.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  title:
+                    type: string
+                    example: Unacceptable
+                  status:
+                    type: integer
+                    default: 406
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/not_acceptable
+            title: Not Acceptable
+            status: 406
+            detail: |
+              "The target resource does not have a current representation that would be acceptable to the user agent, 
+              according to the proactive negotiation header fields received in the request."
+    500_InternalServerError:
+      description: |
+        The server encountered an unexpected error. Retrying the request after a certain time could help.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 500
+                  title:
+                    type: string
+                    default: Internal Server Error
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/internal_server_error
+            title: Internal Server Error
+            status: 500
+            detail: The server encountered an unexpected condition that prevented it from fulfilling the request.
+    409_Conflict:
+      description: Conflict
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 409
+                  title:
+                    type: string
+                    default: Conflict
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/conflict
+            title: Conflict
+            status: 409
+            detail: The current state of the resource on the server is incompatible with your request.
+    415_UnsupportedMediaType:
+      description: |
+        Unsupported Media Type. When provided as a response to a `PATCH` request,
+        the response will provide an `Accept-Patch` response header to notify
+        the client what patch document media types are supported.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  title:
+                    type: string
+                    example: Unsupported Media Type
+                  status:
+                    type: integer
+                    default: 415
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/unsupported_media_type
+            title: Unsupported Media Type
+            status: 415
+            detail: This request is not acceptable because the payload is in an unsupported format.
+    404_NotFound:
+      description: Not Found
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  status:
+                    type: integer
+                    default: 404
+                  title:
+                    type: string
+                    default: Not Found
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/not_found
+            title: Not Found
+            status: 404
+            detail: The requested resource could not be found.
+    412_PreconditionFailed:
+      description: Precondition Failed
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  title:
+                    type: string
+                    default: Precondition Failed
+                  status:
+                    type: integer
+                    default: 412
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/precondition_failed
+            title: Precondition Failed
+            status: 412
+            detail: The provided conditional header was not fulfilled.
+    428_PreconditionRequired:
+      description: Precondition Required
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ProblemDetails'
+              - type: object
+                properties:
+                  title:
+                    type: string
+                    default: Precondition Required
+                  status:
+                    type: integer
+                    default: 428
+          example:
+            type: http://api.adobeaemcloud.com/adobe/meta/errors/precondition_required
+            title: Precondition Required
+            status: 428
+            detail: This operation requires the use of a conditional header.
+    204_NoContent:
+      description: No Content
+  headers:
+    Location:
+      schema:
+        type: string
+        format: uri
+      description: |
+        The `Location` header field is used in some responses to refer to a specific resource in relation to the response.
+        The type of relationship is defined by the combination of request method and status code semantics.
+
+        For more details, please head over to [RFC9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-location).
+      required: true
+    ETag:
+      schema:
+        type: string
+      description: |
+        The `ETag` field in a response provides the current entity tag for the selected representation, as determined at the
+        conclusion of handling the request. An entity tag is an opaque validator for differentiating between multiple
+        representations of the same resource, regardless of whether those multiple representations are due to resource state
+        changes over time, content negotiation resulting in multiple representations being valid at the same time, or both.
+        An entity tag consists of an opaque quoted string, possibly prefixed by a weakness indicator.
+
+        For more details, please head over to [RFC9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-etag).
+      required: true
