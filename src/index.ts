@@ -1,11 +1,9 @@
 import { fromHono } from "chanfana";
 import { Hono } from "hono";
-import {
-	PagesList,
-	PagesFetchById,
-	PagesFetchByUrl,
-	PagesContentById,
-} from "./endpoints/pages";
+import { PagesList } from "./endpoints/pagesList";
+import { PagesFetchById } from "./endpoints/pagesFetchById";
+import { PagesFetchByUrl } from "./endpoints/pagesFetchByUrl";
+import { PagesContentById } from "./endpoints/pagesContentById";
 
 const app = new Hono();
 
