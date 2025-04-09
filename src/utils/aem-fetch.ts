@@ -3,12 +3,12 @@ import { AEMContext } from "./ctx";
 
 export async function fetchAEMJson<T = any>(
   ctx: AEMContext,
-  path: string,
+  uuid: string,
   depth: number = 1
 ): Promise<T> {
   const { host, authToken } = ctx;
-
-  const url = new URL(`${path}.${depth}.json`, `https://${host}`);
+  
+  const url = new URL(`/bin/querybuilder.json?type=nt:base&property=jcr:uuid&p.limit=1&p.hits=full&property.value=${uuid}&p.nodedepth=${depth}`, `https://${host}`);
   
   const response = await fetch(url.toString(), {
     headers: {
