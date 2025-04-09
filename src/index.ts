@@ -11,6 +11,8 @@ const openapi = fromHono(app, {
 	docs_url: "/",
 });
 
+
+
 openapi.get("/pages", PagesList);
 openapi.get("/pages/:pageId", PagesFetchById);
 openapi.get("/pages/byUrl", PagesFetchByUrl);

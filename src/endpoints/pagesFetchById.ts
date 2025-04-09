@@ -1,55 +1,68 @@
-import { OpenAPIRoute, Str } from "chanfana";
-import { z } from "zod";
-import { PageSchema, ProblemDetailsSchema } from "../schemas";
+import { OpenAPIRoute, Str } from 'chanfana';
+import { z } from 'zod';
+import { PageSchema, ProblemDetailsSchema } from '../schemas';
+import { AEMContext, getAEMContext } from 'utils/ctx';
+import { fetchAEMJson } from 'utils/aem-fetch';
+import { Env } from 'types';
 
 export class PagesFetchById extends OpenAPIRoute {
   schema = {
-    tags: ["Pages"],
-    summary: "Get a Page by ID",
+    tags: ['Pages'],
+    summary: 'Get a Page by ID',
     request: {
       params: z.object({
-        pageId: Str({ description: "Page identifier" }),
+        pageId: Str({ description: 'Page identifier' }),
       }),
     },
     responses: {
-      "200": {
-        description: "OK",
+      '200': {
+        description: 'OK',
         content: {
-          "application/json": {
+          'application/json': {
             schema: PageSchema,
           },
         },
       },
-      "404": {
-        description: "Page not found",
-        content: { "application/json": { schema: ProblemDetailsSchema } },
+      '404': {
+        description: 'Page not found',
+        content: { 'application/json': { schema: ProblemDetailsSchema } },
       },
     },
   };
 
-  async handle(c: any) {
+  async handle(c: { env: Env }) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { pageId } = data.params;
-    console.log("Page ID:", pageId);
+    const path = atob(pageId);
 
-    // TODO: Implement actual logic to fetch page by ID
-    const pageExists = true; // Replace with actual check
+    const ctx = getAEMContext(c.env);
+    const page = await fetchAEMJson(ctx, path);
 
-    if (!pageExists) {
+    // console.log('Page:', page);
+
+    if (!page) {
       return new Response(
-        JSON.stringify({ title: "Not Found", status: 404, detail: `Page with ID ${pageId} not found.` }),
+        JSON.stringify({
+          title: 'Not Found',
+          status: 404,
+          detail: `Page with ID ${pageId} not found.`,
+        }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
     return {
       id: pageId,
-      versionInfo: { label: "v1.1", description: "Updated version", created: { at: new Date().toISOString(), by: "editor" } },
-      siteId: "site-abc",
+      versionInfo: {
+        label: 'v1.1',
+        description: 'Updated version',
+        created: { at: new Date().toISOString(), by: 'editor' },
+      },
+      siteId: 'site-abc',
       path: `/example/${pageId}`,
       title: `Page ${pageId}`,
       name: pageId,
       description: `Details for page ${pageId}.`,
     };
   }
-} 
+}
