@@ -33,12 +33,11 @@ export class PagesFetchById extends OpenAPIRoute {
   async handle(c: { env: Bindings }) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { pageId } = data.params;
-    const path = atob(pageId);
 
     const ctx = getAEMContext(c.env);
-    const page = await fetchAEMJson(ctx, path);
+    const page = await fetchAEMJson(ctx, pageId);
 
-    // console.log('Page:', page);
+    console.log('Page:', page);
 
     if (!page) {
       return new Response(
