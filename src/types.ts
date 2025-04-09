@@ -9,7 +9,8 @@ export const Task = z.object({
   due_date: DateTime(),
 });
 
-export interface Env {
-  AEM_AUTHOR_HOST: string;
-  AEM_API_KEY: string;
+export type Bindings = {
+  AEM_AUTHOR_HOST: string
+  AEM_API_KEY: string
 }
+

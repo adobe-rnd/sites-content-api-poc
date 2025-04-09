@@ -1,4 +1,4 @@
-import { Env } from "types";
+import { Bindings } from "types";
 
 
 
@@ -7,7 +7,7 @@ export interface AEMContext {
   authToken: string;
 }
 
-export function getAEMContext(env: Env): AEMContext {
+export function getAEMContext(env: Bindings): AEMContext {
   return {
     host: env.AEM_AUTHOR_HOST,
     authToken: env.AEM_API_KEY

@@ -1,9 +1,9 @@
 import { OpenAPIRoute, Str } from 'chanfana';
 import { z } from 'zod';
 import { PageSchema, ProblemDetailsSchema } from '../schemas';
-import { AEMContext, getAEMContext } from 'utils/ctx';
+import {  getAEMContext } from 'utils/ctx';
 import { fetchAEMJson } from 'utils/aem-fetch';
-import { Env } from 'types';
+import { Bindings } from 'types';
 
 export class PagesFetchById extends OpenAPIRoute {
   schema = {
@@ -30,7 +30,7 @@ export class PagesFetchById extends OpenAPIRoute {
     },
   };
 
-  async handle(c: { env: Env }) {
+  async handle(c: { env: Bindings }) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { pageId } = data.params;
     const path = atob(pageId);
