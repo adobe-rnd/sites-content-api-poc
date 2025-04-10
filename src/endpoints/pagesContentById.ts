@@ -35,10 +35,9 @@ export class PagesContentById extends OpenAPIRoute {
   async handle(c: { env: Bindings }) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { pageId } = data.params;
-    const path = atob(pageId);
 
     const ctx = getAEMContext(c.env);
-    const page = await fetchAEMJson(ctx, path, 6);
+    const page = await fetchAEMJson(ctx, pageId, 6);
 
     if (!page) {
        return new Response(

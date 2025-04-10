@@ -1,6 +1,7 @@
 import { h } from 'hastscript';
 import { toHtml } from 'hast-util-to-html';
 import { fromHtml } from 'hast-util-from-html';
+import { format } from 'hast-util-format';
 
 /**
  * Converts AEM JSON content to HTML
@@ -11,6 +12,7 @@ export function json2html(content: any): string {
   const head = createHead(content);
   const main = createMain(content);
   const doc = createDocument(head, main, content.htmlLang);
+  format(doc);
   return toHtml(doc, {
     upperDoctype: true,
   });
@@ -89,15 +91,28 @@ function createSection(sectionJson: any) {
             case 'core/franklin/components/text/v1/text':
                 section.children.push(fromHtml(value.text || '', {fragment: true}));
                 break;
+            case 'core/franklin/components/image/v1/image':
+                section.children.push(h('img', { src: value.image, alt: value.imageAlt }));
+                break;
+            case 'core/franklin/components/button/v1/button':
+                const type = value.linkType || 'link';
+                switch (type) {
+                    case 'primary':
+                        section.children.push(h('strong', h('a', { href: value.link }, value.linkText)));
+                        break;
+                    case 'secondary':
+                        section.children.push(h('em', h('a', { href: value.link }, value.linkText)));
+                        break;
+                    default:
+                        section.children.push(h('a', { href: value.link }, value.linkText));
+                        break;
+                }
+                break;
             case 'core/franklin/components/block/v1/block':
                 section.children.push(createBlock(value));
                 break;
-        }
-
-        
-    
+        }    
     }
-    
   }
   return section;
 }
@@ -109,78 +124,4 @@ function createBlock(blockJson: any) {
     return block;
   }
   return null;
-}
-
-/**
- * Recursively converts AEM JSON structure to HAST
- * @param node The AEM JSON node to convert
- * @returns HAST node representation
- */
-function convertToHast(node: any): any {
-  // Handle null or undefined nodes
-  if (!node) {
-    return null;
-  }
-
-  // Handle text content with HTML
-  if (node.text && typeof node.text === 'string') {
-    return h('div', { innerHTML: node.text });
-  }
-
-  // Handle container components
-  if (node['sling:resourceType']?.includes('container')) {
-    const children = [];
-
-    // Process child components
-    for (const [key, value] of Object.entries(node)) {
-      // Skip properties that aren't child components
-      if (key.startsWith('jcr:') || key === 'sling:resourceType' || key === 'layout') {
-        continue;
-      }
-
-      if (typeof value === 'object') {
-        const childNode = convertToHast(value);
-        if (childNode) {
-          children.push(childNode);
-        }
-      }
-    }
-
-    return h('div', { class: 'container' }, children);
-  }
-
-  // Handle text components
-  if (node['sling:resourceType']?.includes('text')) {
-    return h('div', { class: 'text-component', innerHTML: node.text });
-  }
-
-  // Handle image components
-  if (node['sling:resourceType']?.includes('image')) {
-    return h('img', {
-      src: node.fileReference || '',
-      alt: node.alt || '',
-      class: 'image-component',
-    });
-  }
-
-  // Handle root page content
-  if (node['jcr:primaryType'] === 'cq:PageContent') {
-    // Process the root container if it exists
-    if (node.root) {
-      return convertToHast(node.root);
-    }
-  }
-
-  // Default case: create a div with available properties
-  const children = [];
-  for (const [key, value] of Object.entries(node)) {
-    if (typeof value === 'object') {
-      const childNode = convertToHast(value);
-      if (childNode) {
-        children.push(childNode);
-      }
-    }
-  }
-
-  return children.length > 0 ? h('div', {}, children) : null;
 }
