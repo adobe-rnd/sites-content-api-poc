@@ -1,5 +1,5 @@
+import { PageInfo } from "../PageInfo";
 import { AEMContext } from "./ctx";
-
 
 export async function fetchAEMJson<T = any>(
   ctx: AEMContext,
@@ -234,59 +234,6 @@ interface UuidQueryResponse extends QueryBuilderResponse { // Inherits base stru
   hits: UuidHit[]; // Specific hit type
 }
 
-// Define the PageInfo class
-export class PageInfo {
-  siteId: string;
-  pageId: string;
-  title: string | null;
-  description: string | null;
-  created: { at: string | null; by: string | null } | null;
-  modified: { at: string | null; by: string | null } | null;
-  published: { at: string | null; by: string | null } | null;
-
-  constructor(data: {
-    siteId: string;
-    pageId: string;
-    title?: string | null;
-    description?: string | null;
-    created?: { at: string | null; by: string | null } | null;
-    modified?: { at: string | null; by: string | null } | null;
-    published?: { at: string | null; by: string | null } | null;
-  }) {
-    this.siteId = data.siteId;
-    this.pageId = data.pageId;
-    this.title = data.title ?? null;
-    this.description = data.description ?? null;
-    this.created = data.created ?? null;
-    this.modified = data.modified ?? null;
-    this.published = data.published ?? null;
-  }
-
-  // Method to generate JSON representation, conditionally omitting null properties
-  toJson(): { [key: string]: any } { 
-    const json: { [key: string]: any } = {
-      id: this.pageId, // Map pageId to id
-      siteId: this.siteId,
-      title: this.title,
-    };
-
-    if (this.description !== null) {
-      json.description = this.description;
-    }
-    if (this.created !== null) {
-      json.created = this.created;
-    }
-    if (this.modified !== null) {
-      json.modified = this.modified;
-    }
-    if (this.published !== null) {
-      json.published = this.published;
-    }
-
-    return json;
-  }
-}
-
 export class AEMFetchError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -332,25 +279,33 @@ export async function determinePageInfoByAemSiteNameAndPagePath(
   const siteContentPath = `/content/${aemSiteName}`;
   // Ensure the final page path doesn't have double slashes if aemSiteName already contains parts of the path
   const fullPagePath = `${siteContentPath}${pagePath}`.replace('//','/'); // Basic double slash removal
-
+  const fullParentPath = `${siteContentPath}${pagePath.split('/').slice(0, -1).join('/')}`.replace('//','/'); // Basic double slash removal
 
   // Construct the QueryBuilder query
   const queryParams = new URLSearchParams({
-    'p.limit': '3',             // we fetch 3 results, the site root uuid and the page with its jcr:content node for title and description
+    'p.limit': '4',             // we fetch 3 results, the site root uuid and the page with its jcr:content node for title and description
     'p.hits': 'selective',      // Only return specified properties
     'p.properties': 'jcr:path jcr:uuid jcr:title jcr:description jcr:created jcr:createdBy cq:lastModified cq:lastModifiedBy cq:lastReplicatedBy_publish cq:lastReplicated_publish', // We need path to identify and uuid
     'group.p.or': 'true',       // Combine the following path conditions with OR
 
-    // Condition 1: Match the site root path exactly
+    // Condition 1: needed to fetch the uuid for siteId
     'group.1_path': siteContentPath,
     'group.1_path.exact': 'true',
 
-    // Condition 2: Match the full page path exactly
+    // Condition 2: needed to fetch the uuid for pageId
     'group.2_path': fullPagePath,
     'group.2_path.exact': 'true',
+    // Condition 3: needed to fetch the title and description for accessed page
     'group.3_path': fullPagePath + '/jcr:content',
     'group.3_path.exact': 'true',
   });
+
+  // Conditionally add the parent path condition if it's different from the site root
+  if (fullParentPath !== siteContentPath) {
+    queryParams.append('group.4_path', fullParentPath);
+    queryParams.append('group.4_path.exact', 'true');
+  }
+
 
   const headers: HeadersInit = {
       'Accept': 'application/json',
@@ -389,8 +344,9 @@ export async function determinePageInfoByAemSiteNameAndPagePath(
           return null;
       }
 
-      let siteId: string | null = null;
       let pageId: string | null = null;
+      let siteId: string | null = null;
+      let parentPageId: string | null = null;
       let title: string | null = null;
       let description: string | null = null;
       let createdAt: string | null = null;
@@ -415,14 +371,20 @@ export async function determinePageInfoByAemSiteNameAndPagePath(
           const hitPublishedBy = hit['cq:lastReplicatedBy_publish'];
 
           if (hitPath === siteContentPath) {
-              siteId = hitUuid || null; // Assign null if uuid is missing
+              siteId = hitUuid || null;
+          }
+          else if (hitPath === fullParentPath) {
+              parentPageId = hitUuid || null;
           }
           else if (hitPath === fullPagePath) {
-              pageId = hitUuid || null; // Assign null if uuid is missing
+              pageId = hitUuid || null;
+          }
+          else if (hitPath === fullParentPath) {
+              parentPageId = hitUuid || null;
           }
           else if (hitPath === fullPagePath + '/jcr:content') {
-              title = hitTitle || null; // Assign null if title is missing
-              description = hitDescription || null; // Assign null if description is missing
+              title = hitTitle || null;
+              description = hitDescription || null;
               createdAt = hitCreatedAt || null;
               createdBy = hitCreatedBy || null;
               modifiedAt = hitModifiedAt || null;
@@ -446,6 +408,7 @@ export async function determinePageInfoByAemSiteNameAndPagePath(
           return new PageInfo({
               pageId,
               siteId,
+              parentPageId,
               title,
               description,
               created,    
@@ -455,6 +418,7 @@ export async function determinePageInfoByAemSiteNameAndPagePath(
       } else {
           if (!siteId) console.warn(`Could not determine Site ID for path: ${siteContentPath}.`);
           if (!pageId) console.warn(`Could not determine Page ID for path: ${fullPagePath}.`);
+          if (!parentPageId) console.warn(`Could not determine Parent Page ID for path: ${fullParentPath}.`);
           console.log("QueryBuilder Hits Received:", data.hits); // Log hits for debugging
           return null;
       }

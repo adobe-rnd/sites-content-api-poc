@@ -4,10 +4,11 @@ import { PageSchema, ProblemDetailsSchema } from "../schemas";
 import { 
     determineAemSiteNameByOwnerAndRepo, 
     determinePageInfoByAemSiteNameAndPagePath, 
-    PageInfo, 
     AEMFetchError
 } from "utils/aem-fetch";
 import { getAEMContext } from "utils/ctx";
+import { PageInfo } from "../PageInfo";
+
 
 // Helper function to parse the Helix Fetch URL
 function parseHelixFetchUrl(url: string): { owner: string; repo: string; pagePath: string } | null {
