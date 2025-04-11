@@ -4,6 +4,54 @@ import { PageSchema, ProblemDetailsSchema } from "../schemas";
 import { determineAemSiteNameByOwnerAndRepo, determinePageInfoByAemSiteNameAndPagePath, PageInfo } from "utils/aem-fetch";
 import { getAEMContext } from "utils/ctx";
 
+// Helper function to parse the Helix Fetch URL
+function parseHelixFetchUrl(url: string): { owner: string; repo: string; pagePath: string } | null {
+  try {
+    const parsedUrl = new URL(url);
+    const parsedPath = parsedUrl.pathname;
+    const pathSegments = parsedPath.split('/').filter(segment => segment.length > 0);
+
+    const deliveryIndex = pathSegments.indexOf('franklin.delivery');
+    let owner: string | undefined;
+    let repo: string | undefined;
+
+    if (deliveryIndex !== -1 && pathSegments.length > deliveryIndex + 2) {
+      owner = pathSegments[deliveryIndex + 1];
+      repo = pathSegments[deliveryIndex + 2];
+    } else {
+      console.error("URL pattern mismatch for owner/repo extraction:", url);
+      return null; // Indicate failure
+    }
+
+    let pagePath = '/';
+    const mainIndex = pathSegments.indexOf('main');
+    if (mainIndex !== -1) {
+        const remainingSegments = pathSegments.slice(mainIndex + 1);
+        pagePath = '/' + (remainingSegments.length > 0 ? remainingSegments.join('/') : '');
+    } else {
+        console.warn(`'main' segment not found in URL path: ${parsedPath}. Using root path '/' as fallback.`);
+        // Fallback already sets pagePath to '/'
+    }
+
+    // Remove .html suffix if present
+    if (pagePath.endsWith('.html')) {
+      pagePath = pagePath.slice(0, -5);
+    }
+
+    if (!owner || !repo) { // Should have been caught earlier, but double-check
+        console.error("Failed to extract owner or repo despite passing initial checks.");
+        return null;
+    }
+
+    return { owner, repo, pagePath };
+
+  } catch (error) {
+    console.error("Error parsing URL:", error);
+    return null; // Indicate failure due to parsing error
+  }
+}
+
+
 export class PagesFetchByUrl extends OpenAPIRoute {
   schema = {
     tags: ["Pages"],
@@ -27,6 +75,10 @@ export class PagesFetchByUrl extends OpenAPIRoute {
         description: "Page not found for the given URL",
         content: { "application/json": { schema: ProblemDetailsSchema } },
       },
+      "400": {
+        description: "Bad Request - Invalid URL format or missing required information",
+        content: { "application/json": { schema: ProblemDetailsSchema } },
+      },
     },
   };
 
@@ -34,66 +86,26 @@ export class PagesFetchByUrl extends OpenAPIRoute {
   async handle(c: any) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { url } = data.query;
+    console.log("Incoming Page URL:", url);
 
-    let owner: string | undefined;
-    let repo: string | undefined;
-    let parsedPath: string | undefined;
-    let pagePath: string = '/'; // Declare and initialize outside try block
+    // Use the new parsing function
+    const parsedDetails = parseHelixFetchUrl(url);
 
-    try {
-      const parsedUrl = new URL(url);
-      parsedPath = parsedUrl.pathname;
-      const pathSegments = parsedPath.split('/').filter(segment => segment.length > 0); // Filter out empty strings
-
-      const deliveryIndex = pathSegments.indexOf('franklin.delivery');
-
-      if (deliveryIndex !== -1 && pathSegments.length > deliveryIndex + 2) {
-        owner = pathSegments[deliveryIndex + 1];
-        repo = pathSegments[deliveryIndex + 2];
-      } else {
-        // URL pattern doesn't match expected structure
-        console.error("URL pattern mismatch:", url);
-        return new Response(
-          JSON.stringify({ title: "Bad Request", status: 400, detail: "Invalid URL structure for extracting organization and site IDs." }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Extract the path after the 'main' segment
-      const mainIndex = pathSegments.indexOf('main');
-      if (mainIndex !== -1) {
-          const remainingSegments = pathSegments.slice(mainIndex + 1);
-          // Ensure it starts with '/' and handle empty remaining segments (path is just /main)
-          pagePath = '/' + (remainingSegments.length > 0 ? remainingSegments.join('/') : '');
-      } else {
-          console.warn(`'main' segment not found in URL path: ${parsedPath}. Using root path '/' as fallback.`);
-          // Fallback already sets pagePath to '/'
-      }
-
-      // Remove .html suffix if present
-      if (pagePath.endsWith('.html')) {
-        pagePath = pagePath.slice(0, -5);
-      }
-
-    } catch (error) {
-      console.error("Error parsing URL:", error);
+    if (!parsedDetails) {
+      // Handle parsing failure
       return new Response(
-        JSON.stringify({ title: "Bad Request", status: 400, detail: "Invalid URL provided." }),
+        JSON.stringify({ title: "Bad Request", status: 400, detail: "Invalid URL structure." }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
+    console.log("parsedDetails:", parsedDetails);
 
-    console.log("Page URL:", url);
-    console.log("Extracted owner:", owner);
-    console.log("Extracted repo:", repo);
-    console.log("Page Path:", pagePath);
-
+    const { owner, repo, pagePath } = parsedDetails;
     const ctx = getAEMContext(c.env);
     const aemSiteName = await determineAemSiteNameByOwnerAndRepo(ctx, owner, repo);
     console.log("AEM Site Name:", aemSiteName);
-
+    
     if (!aemSiteName) {
-      // Handle case where AEM site name couldn't be determined
       console.error(`Could not determine AEM site name for owner: ${owner}, repo: ${repo}`);
       return new Response(
         JSON.stringify({ title: "Bad Request", status: 400, detail: "Could not determine AEM site configuration." }),
@@ -101,10 +113,8 @@ export class PagesFetchByUrl extends OpenAPIRoute {
       );
     }
     
-    // Call the updated function which now returns PageInfo | null
     const pageInfo: PageInfo | null = await determinePageInfoByAemSiteNameAndPagePath(ctx, aemSiteName, pagePath);
 
-    // Check if pageInfo is null (indicates not found or error during fetch)
     if (!pageInfo) {
       console.warn(`Page not found or failed to fetch details for AEM Site: ${aemSiteName}, Path: ${pagePath}`);
       return new Response(
@@ -114,7 +124,7 @@ export class PagesFetchByUrl extends OpenAPIRoute {
     }
 
     const responseBody = pageInfo.toJson();
-    responseBody.path = pagePath;
+    responseBody.path = pagePath; 
     console.log("responseBody", responseBody);
     return responseBody;
   }
