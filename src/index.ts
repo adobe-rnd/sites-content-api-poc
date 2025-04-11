@@ -13,8 +13,9 @@ const openapi = fromHono(app, {
 });
 
 openapi.get("/pages", PagesList);
-openapi.get("/pages/:pageId", PagesFetchById);
+// Define specific route before parameterized one
 openapi.get("/pages/byUrl", PagesFetchByUrl);
+openapi.get("/pages/:pageId", PagesFetchById);
 openapi.get("/pages/:pageId/content", PagesContentById);
 
 export default app;
