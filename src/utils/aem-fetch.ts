@@ -58,7 +58,7 @@ interface DetermineUuidResponse {
 export async function determineUuidByPath(
   ctx: AEMContext,
   path: string
-): Promise<string | null> { // Return type explicitly includes null
+): Promise<string | null> { // Return type explicitly includes null for 'not found' cases
   const { host, authToken } = ctx;
 
   // Ensure path starts with a slash for consistency, unless it's empty
@@ -76,12 +76,15 @@ export async function determineUuidByPath(
 
     // Check response status before attempting to parse JSON
     if (!response.ok) {
-       // Log the error response body for debugging
-       const errorBody = await response.text();
-       console.error(`AEM fetch failed for UUID determination: ${response.status} ${response.statusText}. Path: ${path}. Response: ${errorBody}`);
-       // Throwing an error might be too disruptive, returning null might be preferred
-       // throw new Error(`AEM fetch failed: ${response.status} ${response.statusText}`);
-       return null;
+       const errorStatus = response.status;
+       const errorStatusText = response.statusText;
+       let errorBody = '';
+       try {
+           errorBody = await response.text();
+       } catch (e) {/* ignore */} // Avoid hiding original error if body read fails
+       console.error(`AEM fetch failed for UUID determination: ${errorStatus} ${errorStatusText}. Path: ${path}. Response: ${errorBody}`);
+       // Throw custom error on fetch failure
+       throw new AEMFetchError(`AEM fetch failed for UUID determination: ${errorStatus} ${errorStatusText}`, errorStatus);
     }
 
     const responseJson = await response.json() as DetermineUuidResponse;
@@ -90,12 +93,19 @@ export async function determineUuidByPath(
     if (responseJson?.jcr?.uuid) {
       return responseJson.jcr.uuid;
     } else {
+      // UUID not found in a successful response - return null as per original logic
       console.warn(`Could not determine UUID for path ${path}. 'jcr.uuid' not found in response:`, responseJson);
       return null;
     }
   } catch (error) {
-     console.error(`Error during fetch operation for UUID determination at path ${path}:`, error);
-     return null; // Return null on fetch or JSON parsing errors
+     // Re-throw AEMFetchError if it's already the correct type
+     if (error instanceof AEMFetchError) {
+         throw error;
+     }
+     // Handle other errors (e.g., network issues, JSON parsing)
+     console.error(`Error during fetch or processing for UUID determination at path ${path}:`, error);
+     // Throw a generic error for unexpected issues
+     throw new Error(`An unexpected error occurred during UUID determination: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -123,7 +133,8 @@ interface QueryBuilderResponse {
  * @param ctx - The AEM context.
  * @param owner - The value of the 'owner' property to search for.
  * @param repo - The value of the 'repo' property to search for.
- * @returns The AEM site name (e.g., "aem-boilerplate") or null if not found or an error occurs.
+ * @returns The AEM site name (e.g., "aem-boilerplate") or null if not found.
+ * @throws {AEMFetchError} If the AEM QueryBuilder request fails.
  */
 export async function determineAemSiteNameByOwnerAndRepo(
   ctx: AEMContext,
@@ -164,20 +175,19 @@ export async function determineAemSiteNameByOwnerAndRepo(
       });
 
       if (!response.ok) {
-          console.error(`Error fetching data from AEM QueryBuilder: ${response.status} ${response.statusText}`);
-          // Log response body for more details if possible
+          const errorStatus = response.status;
+          const errorStatusText = response.statusText;
+          console.error(`Error fetching data from AEM QueryBuilder: ${errorStatus} ${errorStatusText}`);
+          let errorBody = '';
           try {
-              const errorBody = await response.text();
-              console.error("Error body:", errorBody);
-          } catch (e) {
-              // Ignore if reading body fails
-          }
-          return null;
+              errorBody = await response.text();
+              console.error("QueryBuilder Error body:", errorBody);
+          } catch (e) { /* Ignore if reading body fails */ }
+          // Throw custom error on fetch failure
+          throw new AEMFetchError(`AEM QueryBuilder fetch failed: ${errorStatus} ${errorStatusText}`, errorStatus);
       }
 
-      // Add type assertion for the response JSON
       const data = await response.json() as QueryBuilderResponse;
-
 
       if (data && data.success && data.hits && data.hits.length > 0) {
            // Access hit properties safely
@@ -202,63 +212,17 @@ export async function determineAemSiteNameByOwnerAndRepo(
           return null;
       }
   } catch (error) {
-      console.error(`Failed to execute AEM QueryBuilder search for owner=${owner}, repo=${repo}:`, error);
-      return null;
+      // Re-throw AEMFetchError if it's already the correct type
+      if (error instanceof AEMFetchError) {
+          throw error;
+      }
+      // Handle other errors (e.g., network issues, JSON parsing)
+      console.error(`Failed to execute or parse AEM QueryBuilder search for owner=${owner}, repo=${repo}:`, error);
+      // Throw a generic error for unexpected issues
+      throw new Error(`An unexpected error occurred during AEM site name determination: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-// Basic type for the page node structure within the site JSON
-interface AemPageNode {
-  "jcr:uuid": string;
-  // other potential properties...
-}
-
-// Basic type for the site JSON structure fetched by path
-interface AemSiteJson {
-  "jcr:uuid": string;
-  [pageName: string]: AemPageNode | any; // Allow indexing by pageName, 'any' for simplicity here
-}
-
-/**
- * Fetches site and specific page UUIDs from AEM based on site name and page name.
- * @deprecated Use determineSiteIdPageIdByAemSiteNameAndPagePath for a more efficient approach.
- * @param ctx - The AEM context.
- * @param aemSiteName - The name of the AEM site (e.g., "aem-boilerplate").
- * @param pageName - The name of the page within the site (e.g., "index").
- * @returns An object containing the siteId and pageId, or null if an error occurs or data is missing.
- */
-export async function determineSiteIdPageIdByAemSiteNameAndPageName(
-  ctx: AEMContext,
-  aemSiteName: string,
-  pageName: string
-): Promise<{ siteId: string; pageId: string } | null> {
-  const sitePath = `content/${aemSiteName}`;
-  try {
-    // Fetch the site JSON, assuming depth 1 is sufficient
-    // Note: This fetches potentially large JSON just for UUIDs.
-    const siteJson = await fetchAEMJsonByPath<AemSiteJson>(ctx, sitePath, 1);
-
-    const siteId = siteJson?.["jcr:uuid"];
-    // Access nested page node safely
-    const pageNode = siteJson?.[pageName] as AemPageNode | undefined;
-    const pageId = pageNode?.["jcr:uuid"];
-
-
-    if (siteId && pageId) {
-      console.log(`(Legacy) Found siteId: ${siteId}, pageId: ${pageId} for site=${aemSiteName}, page=${pageName}`);
-      return { siteId, pageId };
-    } else {
-       // Log more specific reasons for failure
-      if (!siteId) console.warn(`(Legacy) Could not determine siteId for site=${aemSiteName}. Missing 'jcr:uuid' at site level.`);
-      if (!pageId) console.warn(`(Legacy) Could not determine pageId for page=${pageName} within site=${aemSiteName}. Missing or invalid page node or 'jcr:uuid'.`);
-      console.log("(Legacy) Received site JSON:", siteJson); // Log for debugging
-      return null;
-    }
-  } catch (error) {
-    console.error(`(Legacy) Failed to fetch or process site/page data for ${sitePath}, page ${pageName}:`, error);
-    return null;
-  }
-}
 
 // Type definitions for the new QueryBuilder response
 interface UuidHit {
@@ -323,6 +287,15 @@ export class PageInfo {
   }
 }
 
+export class AEMFetchError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'AEMFetchError';
+    this.status = status;
+  }
+}
+
 /**
  * Determines the site ID (jcr:uuid of the site root) and page ID (jcr:uuid of the page node)
  * using a single AEM QueryBuilder request.
@@ -331,6 +304,7 @@ export class PageInfo {
  * @param aemSiteName - The name of the AEM site (e.g., "aem-boilerplate").
  * @param pagePath - The relative path of the page within the site (e.g., "/index" or "/products/cool-widget"). Should start with a slash.
  * @returns An object containing siteId and a page object with pageId, title, and description, or null if either cannot be determined or an error occurs.
+ * @throws {AEMFetchError} If the fetch operation fails with a non-2xx status code.
  */
 export async function determinePageInfoByAemSiteNameAndPagePath(
   ctx: AEMContext,
@@ -395,12 +369,16 @@ export async function determinePageInfoByAemSiteNameAndPagePath(
       });
 
       if (!response.ok) {
-          console.error(`Error fetching site/page UUIDs from AEM QueryBuilder: ${response.status} ${response.statusText}`);
+          const errorStatus = response.status;
+          const errorStatusText = response.statusText;
+          console.error(`Error fetching site/page UUIDs from AEM QueryBuilder: ${errorStatus} ${errorStatusText}`);
+          let errorBody = '';
           try {
-              const errorBody = await response.text();
+              errorBody = await response.text();
               console.error("QueryBuilder Error body:", errorBody);
           } catch (e) { /* Ignore body read error */ }
-          return null;
+          // Throw custom error with status
+          throw new AEMFetchError(`AEM QueryBuilder fetch failed: ${errorStatus} ${errorStatusText}. Body: ${errorBody}`, errorStatus);
       }
 
       const data = await response.json() as UuidQueryResponse;
@@ -482,7 +460,14 @@ export async function determinePageInfoByAemSiteNameAndPagePath(
       }
 
   } catch (error) {
+      // Re-throw AEMFetchError if it's already the correct type
+      if (error instanceof AEMFetchError) {
+          throw error;
+      }
+      // Handle other errors (e.g., network issues, JSON parsing)
       console.error(`Failed to execute or parse AEM QueryBuilder search for site/page UUIDs (Site: ${aemSiteName}, Page Path: ${pagePath}):`, error);
-      return null;
+      // Optionally, wrap other errors in a generic AEMFetchError or handle differently
+      // For now, let's throw a generic error for non-fetch related issues
+      throw new Error(`An unexpected error occurred during AEM fetch for site/page info: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

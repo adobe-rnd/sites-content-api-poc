@@ -1,7 +1,12 @@
 import { OpenAPIRoute, Str } from "chanfana";
 import { z } from "zod";
 import { PageSchema, ProblemDetailsSchema } from "../schemas";
-import { determineAemSiteNameByOwnerAndRepo, determinePageInfoByAemSiteNameAndPagePath, PageInfo } from "utils/aem-fetch";
+import { 
+    determineAemSiteNameByOwnerAndRepo, 
+    determinePageInfoByAemSiteNameAndPagePath, 
+    PageInfo, 
+    AEMFetchError
+} from "utils/aem-fetch";
 import { getAEMContext } from "utils/ctx";
 
 // Helper function to parse the Helix Fetch URL
@@ -88,11 +93,9 @@ export class PagesFetchByUrl extends OpenAPIRoute {
     const { url } = data.query;
     console.log("Incoming Page URL:", url);
 
-    // Use the new parsing function
     const parsedDetails = parseHelixFetchUrl(url);
 
     if (!parsedDetails) {
-      // Handle parsing failure
       return new Response(
         JSON.stringify({ title: "Bad Request", status: 400, detail: "Invalid URL structure." }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
@@ -102,30 +105,62 @@ export class PagesFetchByUrl extends OpenAPIRoute {
 
     const { owner, repo, pagePath } = parsedDetails;
     const ctx = getAEMContext(c.env);
-    const aemSiteName = await determineAemSiteNameByOwnerAndRepo(ctx, owner, repo);
-    console.log("AEM Site Name:", aemSiteName);
-    
-    if (!aemSiteName) {
-      console.error(`Could not determine AEM site name for owner: ${owner}, repo: ${repo}`);
-      return new Response(
-        JSON.stringify({ title: "Bad Request", status: 400, detail: "Could not determine AEM site configuration." }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    const pageInfo: PageInfo | null = await determinePageInfoByAemSiteNameAndPagePath(ctx, aemSiteName, pagePath);
 
-    if (!pageInfo) {
-      console.warn(`Page not found or failed to fetch details for AEM Site: ${aemSiteName}, Path: ${pagePath}`);
-      return new Response(
-        JSON.stringify({ title: "Not Found", status: 404, detail: `Page with URL ${url} not found or failed to fetch details.` }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+    try {
+        const aemSiteName = await determineAemSiteNameByOwnerAndRepo(ctx, owner, repo);
+        console.log("AEM Site Name:", aemSiteName);
+        
+        if (!aemSiteName) {
+          console.error(`Could not determine AEM site name for owner: ${owner}, repo: ${repo}`);
+          // Return 404 as the site config linked to owner/repo wasn't found
+          return new Response(
+            JSON.stringify({ title: "Not Found", status: 404, detail: "Could not determine AEM site configuration for the given URL." }),
+            { status: 404, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // This call can now throw AEMFetchError
+        const pageInfo: PageInfo | null = await determinePageInfoByAemSiteNameAndPagePath(ctx, aemSiteName, pagePath);
 
-    const responseBody = pageInfo.toJson();
-    responseBody.path = pagePath; 
-    console.log("responseBody", responseBody);
-    return responseBody;
+        // Original logic for pageInfo being null (logical not found, not a fetch error)
+        if (!pageInfo) {
+          console.warn(`Page not found (logic check) for AEM Site: ${aemSiteName}, Path: ${pagePath}`);
+          return new Response(
+            JSON.stringify({ title: "Not Found", status: 404, detail: `Page path not found within the determined AEM site for URL ${url}.` }),
+            { status: 404, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const responseBody = pageInfo.toJson();
+        responseBody.path = pagePath; 
+        console.log("responseBody", responseBody);
+        return responseBody;
+
+    } catch (error) {
+        console.error("Error in page fetch handler:", error);
+
+        if (error instanceof AEMFetchError) {
+            if (error.status === 401) {
+                // Specific error for AEM 401 Unauthorized
+                return new Response(
+                    JSON.stringify({ title: "Bad Gateway", status: 502, detail: "This service is not authorized to access AEM." }),
+                    { status: 502, headers: { 'Content-Type': 'application/json' } }
+                );
+            } else {
+                 // Other AEM fetch errors (e.g., 404 from AEM, 5xx from AEM)
+                 // Return 502 Bad Gateway as the downstream service failed
+                 return new Response(
+                    JSON.stringify({ title: "Bad Gateway", status: 502, detail: `Failed to fetch data from AEM. Status: ${error.status}.` }),
+                    { status: 502, headers: { 'Content-Type': 'application/json' } }
+                );
+            }
+        } else {
+             // Generic internal server error for unexpected issues
+             return new Response(
+                JSON.stringify({ title: "Internal Server Error", status: 500, detail: "An unexpected error occurred." }),
+                { status: 500, headers: { 'Content-Type': 'application/json' } }
+            );
+        }
+    }
   }
 } 
