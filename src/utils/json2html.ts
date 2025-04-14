@@ -2,6 +2,7 @@ import { h } from 'hastscript';
 import { toHtml } from 'hast-util-to-html';
 import { fromHtml } from 'hast-util-from-html';
 import { format } from 'hast-util-format';
+import { Element, Root } from 'hast';
 
 /**
  * Converts AEM JSON content to HTML
@@ -18,13 +19,13 @@ export function json2html(content: any): string {
   });
 }
 
-function createDocument(head: any, main: any, htmlLang: string) {
+function createDocument(head: Element, main: Element, htmlLang: string): Root {
   return {
     type: 'root',
     children: [
       { type: 'doctype' },
       h('html', htmlLang ? { lang: htmlLang } : null, [
-        h('head', [head]),
+        head,
         h('body', [h('header', []), main, h('footer', [])]),
       ]),
     ],
@@ -32,16 +33,16 @@ function createDocument(head: any, main: any, htmlLang: string) {
 }
 
 function createHead(json: any) {
-  const head = [];
+  const head = h('head');
   const contentNode = json['jcr:content'];
   if (contentNode) {
     const title = contentNode['jcr:title'];
     if (title) {
-      head.push(h('title', title));
+      head.children.push(h('title', title));
     }
     const description = contentNode['jcr:description'];
     if (description) {
-      head.push(h('meta', { name: 'description', content: description }));
+      head.children.push(h('meta', { name: 'description', content: description }));
     }
 
     // TODO add other meta tags
