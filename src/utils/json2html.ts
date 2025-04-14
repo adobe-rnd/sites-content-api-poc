@@ -13,7 +13,7 @@ export function json2html(content: any): string {
   const main = createMain(content);
   const doc = createDocument(head, main, content.htmlLang);
   format(doc);
-  return toHtml(doc, {
+  return toHtml(doc as any, {
     upperDoctype: true,
   });
 }
@@ -24,7 +24,7 @@ function createDocument(head: any, main: any, htmlLang: string) {
     children: [
       { type: 'doctype' },
       h('html', htmlLang ? { lang: htmlLang } : null, [
-        head,
+        h('head', [head]),
         h('body', [h('header', []), main, h('footer', [])]),
       ]),
     ],
@@ -78,7 +78,6 @@ function createSection(sectionJson: any) {
   const section = h('div');
 
   console.log(sectionJson);
-  // section.push(h('div'));
 
   for (const [key, value] of Object.entries(sectionJson)) {
     if (typeof value === 'object' && value !== null) {
@@ -95,10 +94,10 @@ function createSection(sectionJson: any) {
                 section.children.push(h('img', { src: value.image, alt: value.imageAlt }));
                 break;
             case 'core/franklin/components/button/v1/button':
-                const type = value.linkType || 'link';
-                switch (type) {
+                const buttonType = value.linkType || 'link';
+                switch (buttonType) {
                     case 'primary':
-                        section.children.push(h('strong', h('a', { href: value.link }, value.linkText)));
+                        section.children.push(h('strong', h('a', { href: value.link as string }, value.linkText as string)));
                         break;
                     case 'secondary':
                         section.children.push(h('em', h('a', { href: value.link }, value.linkText)));
