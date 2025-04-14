@@ -251,7 +251,7 @@ export class AEMFetchError extends Error {
   }
 }
 
-export function handleAEMErrorResponse(error: unknown): Response {
+export function handleErrors(error: unknown): Response {
   console.error("Error occurred:", error);
 
   if (error instanceof AEMFetchError) {

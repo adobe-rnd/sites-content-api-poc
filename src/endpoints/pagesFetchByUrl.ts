@@ -4,7 +4,7 @@ import { PageSchema, ProblemDetailsSchema } from "../schemas";
 import { 
     determineAemSiteNameByOwnerAndRepo, 
     determinePageInfoByAemSiteNameAndPagePath, 
-    handleAEMErrorResponse
+    handleErrors
 } from "utils/aem-fetch";
 import { getAEMContext } from "utils/ctx";
 import { PageInfo } from "../PageInfo";
@@ -93,7 +93,7 @@ export class PagesFetchByUrl extends OpenAPIRoute {
         return responseBody;
 
     } catch (error) {
-        return handleAEMErrorResponse(error);
+        return handleErrors(error);
     }
   }
 }

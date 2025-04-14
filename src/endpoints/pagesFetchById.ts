@@ -2,7 +2,7 @@ import { OpenAPIRoute, Str } from 'chanfana';
 import { z } from 'zod';
 import { PageSchema, ProblemDetailsSchema } from '../schemas';
 import {  getAEMContext } from 'utils/ctx';
-import { fetchAEMJson, handleAEMErrorResponse } from 'utils/aem-fetch';
+import { fetchAEMJson, handleErrors } from 'utils/aem-fetch';
 import { Bindings } from 'types';
 
 export class PagesFetchById extends OpenAPIRoute {
@@ -62,7 +62,7 @@ export class PagesFetchById extends OpenAPIRoute {
       );
 
     } catch (error) {
-      return handleAEMErrorResponse(error);
+      return handleErrors(error);
     }
   }
 }
