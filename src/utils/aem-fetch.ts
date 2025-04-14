@@ -251,6 +251,33 @@ export class AEMFetchError extends Error {
   }
 }
 
+export function handleAEMErrorResponse(error: unknown): Response {
+  console.error("Error occurred:", error);
+
+  if (error instanceof AEMFetchError) {
+      if (error.status === 401) {
+          // Specific error for AEM 401 Unauthorized
+          return new Response(
+              JSON.stringify({ title: "Bad Gateway", status: 502, detail: "This service is not authorized to access AEM." }),
+              { status: 502, headers: { 'Content-Type': 'application/json' } }
+          );
+      } else {
+           // Other AEM fetch errors (e.g., 404 from AEM, 5xx from AEM)
+           // Return 502 Bad Gateway as the downstream service failed
+           return new Response(
+              JSON.stringify({ title: "Bad Gateway", status: 502, detail: `Failed to fetch data from AEM. Status: ${error.status}.` }),
+              { status: 502, headers: { 'Content-Type': 'application/json' } }
+          );
+      }
+  } else {
+       // Generic internal server error for unexpected issues
+       return new Response(
+          JSON.stringify({ title: "Internal Server Error", status: 500, detail: "An unexpected error occurred." }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+  }
+}
+
 /**
  * Determines the site ID (jcr:uuid of the site root) and page ID (jcr:uuid of the page node)
  * using a single AEM QueryBuilder request.
