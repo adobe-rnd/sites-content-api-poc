@@ -18,7 +18,15 @@ export async function fetchAEMJson<T = any>(
   });
 
   if (!response.ok) {
-    throw new Error(`AEM fetch failed: ${response.status} ${response.statusText}`);
+    const errorStatus = response.status;
+    const errorStatusText = response.statusText;
+    let errorBody = '';
+    try {
+        errorBody = await response.text();
+    } catch (e) {/* ignore */}
+    console.error(`AEM fetch failed: ${errorStatus} ${errorStatusText}. UUID: ${uuid}. Response: ${errorBody}`);
+    // Throw custom error on fetch failure
+    throw new AEMFetchError(`AEM fetch failed: ${errorStatus} ${errorStatusText}`, errorStatus);
   }
   return response.json();
 }
