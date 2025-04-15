@@ -21,8 +21,7 @@ export class PagesFetchByUrl extends OpenAPIRoute {
         url: Str({ description: "The full public URL of the page, e.g. https://xwalk-renderer.adobeaem.workers.dev/xwalkpage/130360:1272151:1534567d-9937-4e40-85ff-369a8ed45367/main/index.html" })
       }),
       headers: z.object({
-        'X-CONTENT-API-PROGRAM-ID': z.string().optional().describe('Required for local development. The AEM Cloud Manager Program ID. Example: 130360'),
-        'X-CONTENT-API-ENV-ID': z.string().optional().describe('Required for local development. The AEM Cloud Manager Environment ID. Example: 1272151'),
+        'X-ADOBE-ROUTING': z.string().describe('Adobe routing information containing program and environment IDs. Example: ...,program=130360,environment=1272151,...'),
       }),
     },
     responses: {
@@ -67,11 +66,7 @@ export class PagesFetchByUrl extends OpenAPIRoute {
     }
     const { siteId, pagePath } = xwalkPageDetails;
 
-    const { programId, envId } = determineProgramIdAndEnvId(
-      c.env.WORKER_ENV, 
-      c.req.url,
-      data.headers
-    );
+    const { programId, envId } = determineProgramIdAndEnvId(data.headers);
     console.log("programId:", programId);
     console.log("envId:", envId);
     const ctx = getAEMContext(c.env, programId, envId);

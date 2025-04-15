@@ -1,81 +1,65 @@
 /**
- * Determines the AEM Program ID and Environment ID based on the execution environment,
- * request URL, and request headers.
+ * Determines the AEM Program ID and Environment ID based on the Adobe Routing header.
  *
- * @param environment The current execution environment ('development' or 'production').
- * @param requestUrl The full URL of the incoming request.
  * @param headersObject An object or Headers instance containing request headers.
  * @returns An object containing the programId and envId, or nulls if not found.
  */
-export function determineProgramIdAndEnvId(
-  environment: string, 
-  requestUrl: string | undefined, // Allow undefined URL
-  headersObject: any // Keep flexible header type for now
-): { programId: string | null; envId: string | null } {
+export function determineProgramIdAndEnvId(headersObject: any): { programId: string | null; envId: string | null } {
   let programId: string | null = null;
   let envId: string | null = null;
 
-  const displayUrl = requestUrl ?? '[URL not provided]';
-  console.log(`Determining IDs. Environment: '${environment}', Request URL: '${displayUrl}'`);
+  let adobeRoutingHeader: string | null = null;
 
-  if (environment === 'production') {
-    console.log("Determining IDs in production environment from hostname...");
-    try {
-      if (requestUrl) { // Check if URL was provided
-        const url = new URL(requestUrl);
-        const hostname = url.hostname;
-        const match = hostname.match(/^author-p(\d+)-e(\d+)\.adobeaemcloud\.com$/);
-        if (match && match[1] && match[2]) {
-          programId = match[1];
-          envId = match[2];
-          console.log(`Extracted programId: ${programId}, envId: ${envId} from hostname: ${hostname}`);
-        } else {
-          console.warn(`Hostname ${hostname} did not match expected production pattern.`);
+  // Step 1: Try to get the X-ADOBE-ROUTING header first, regardless of environment
+  if (headersObject) {
+    if (typeof headersObject.get === 'function') {
+        // Standard Headers object
+        adobeRoutingHeader = headersObject.get('X-ADOBE-ROUTING') || headersObject.get('x-adobe-routing');
+    } else if (typeof headersObject === 'object' && headersObject !== null) {
+        // Plain object (case-insensitive lookup)
+        const lowerCaseHeaders: { [key: string]: string } = {};
+        for (const key in headersObject) {
+            if (Object.prototype.hasOwnProperty.call(headersObject, key)) {
+                const value = headersObject[key];
+                lowerCaseHeaders[key.toLowerCase()] = typeof value === 'string' ? value : String(value);
+            }
         }
-      } else {
-        console.warn("Request URL is missing, cannot determine IDs from hostname.");
-      }
-    } catch (e) {
-        console.error("Error parsing request URL for hostname:", e);
-    }
-  } else { // Assuming development or other non-production
-    console.log("Determining IDs in non-production environment from headers...");
-    
-    console.log("Headers object received:", headersObject);
-
-    if (!headersObject) {
-      console.warn("No headers object provided.");
-      // Consider if this should be an error depending on requirements
+        adobeRoutingHeader = lowerCaseHeaders['x-adobe-routing'];
     } else {
-        // Try standard Headers.get method (if headersObject is a Headers instance)
-        if (typeof headersObject.get === 'function') {
-            console.log("Headers object supports .get() method.");
-            programId = headersObject.get('X-CONTENT-API-PROGRAM-ID');
-            envId = headersObject.get('X-CONTENT-API-ENV-ID');
-        } 
-        // Check if headersObject is a plain object (likely from getValidatedData)
-        else if (typeof headersObject === 'object' && headersObject !== null) {
-             console.log("Accessing headers as plain object properties (case-insensitive).");
-             // Normalize keys to lowercase for case-insensitive matching
-             const lowerCaseHeaders: { [key: string]: string } = {};
-             for (const key in headersObject) {
-                 if (Object.prototype.hasOwnProperty.call(headersObject, key)) {
-                     // Ensure value is a string before assigning
-                     const value = headersObject[key];
-                     lowerCaseHeaders[key.toLowerCase()] = typeof value === 'string' ? value : String(value);
-                 }
-             }
-             programId = lowerCaseHeaders['x-content-api-program-id'];
-             envId = lowerCaseHeaders['x-content-api-env-id'];
-        } else {
-            console.warn("Provided headers object structure is unrecognized. Type:", typeof headersObject);
-        }
+        console.warn("Provided headers object structure is unrecognized. Type:", typeof headersObject);
     }
-
-    console.log(`Attempted to read headers. Program ID: ${programId}, Env ID: ${envId}`);
-    if (!programId) console.warn("X-CONTENT-API-PROGRAM-ID header not found or is null/empty.");
-    if (!envId) console.warn("X-CONTENT-API-ENV-ID header not found or is null/empty.");
   }
 
+  if (adobeRoutingHeader) {
+    console.log("Found X-ADOBE-ROUTING header:", adobeRoutingHeader);
+    try {
+      const routingInfo = adobeRoutingHeader.split(',').reduce((acc, part) => {
+        const [key, value] = part.trim().split('=');
+        if (key && value) {
+          acc[key] = value.replace(/^"|"$/g, ''); // Remove surrounding quotes if any
+        }
+        return acc;
+      }, {} as { [key: string]: string });
+
+      programId = routingInfo['program'] || null;
+      envId = routingInfo['environment'] || null;
+
+      if (programId && envId) {
+        console.log(`Extracted programId: ${programId}, envId: ${envId} from X-ADOBE-ROUTING header.`);
+      } else {
+        console.warn("Could not extract programId or envId from X-ADOBE-ROUTING header. Header content:", adobeRoutingHeader);
+        // Reset IDs if extraction failed partially or completely to allow fallback
+        programId = null;
+        envId = null;
+      }
+    } catch (e) {
+      console.error("Error parsing X-ADOBE-ROUTING header:", e, adobeRoutingHeader);
+      // Reset IDs on error to allow fallback
+      programId = null;
+      envId = null;
+    }
+  } else {
+    console.log("X-ADOBE-ROUTING header not found.");
+  }
   return { programId, envId };
 } 

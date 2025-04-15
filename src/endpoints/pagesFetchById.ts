@@ -14,6 +14,9 @@ export class PagesFetchById extends OpenAPIRoute {
       params: z.object({
         pageId: Str({ description: 'Page identifier' }),
       }),
+      headers: z.object({
+        'X-ADOBE-ROUTING': z.string().describe('Adobe routing information containing program and environment IDs. Example: ...,program=130360,environment=1272151,...'),
+      }),
     },
     responses: {
       '200': {
@@ -35,11 +38,7 @@ export class PagesFetchById extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { pageId } = data.params;
 
-    const { programId, envId } = determineProgramIdAndEnvId(
-      c.env.WORKER_ENV, 
-      c.req.url,
-      data.headers
-    );
+    const { programId, envId } = determineProgramIdAndEnvId(data.headers);
     console.log("programId:", programId);
     console.log("envId:", envId);
     const ctx = getAEMContext(c.env, programId, envId);

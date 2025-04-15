@@ -26,8 +26,7 @@ export class PagesList extends OpenAPIRoute {
         }),
       }),
       headers: z.object({
-        'X-CONTENT-API-PROGRAM-ID': z.string().optional().describe('Required for local development. The AEM Cloud Manager Program ID. Example: 130360'),
-        'X-CONTENT-API-ENV-ID': z.string().optional().describe('Required for local development. The AEM Cloud Manager Environment ID. Example: 1272151'),
+        'X-ADOBE-ROUTING': z.string().describe('Adobe routing information containing program and environment IDs. Example: ...,program=130360,environment=1272151,...'),
       }),
     },
     responses: {
@@ -53,11 +52,7 @@ export class PagesList extends OpenAPIRoute {
     
     const { parentPageId, siteId, path, pathMatchType, cursor, limit } = data.query;
 
-    const { programId, envId } = determineProgramIdAndEnvId(
-      c.env.WORKER_ENV, 
-      c.request?.url,
-      data.headers
-    );
+    const { programId, envId } = determineProgramIdAndEnvId(data.headers);
     console.log("programId:", programId);
     console.log("envId:", envId);
     const ctx = getAEMContext(c.env, programId, envId);
