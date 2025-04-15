@@ -34,7 +34,7 @@ export class PagesFetchById extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { pageId } = data.params;
 
-    const ctx = getAEMContext(c.env);
+    const ctx = getAEMContext(c.env, c.env.AEM_API_KEY, c.env.ENVIRONMENT);
     
     try {
       const page = await fetchAEMJson(ctx, pageId);
