@@ -45,13 +45,13 @@ export class PagesContentById extends OpenAPIRoute {
     },
   };
 
-  async handle(c: { env: Bindings, request: Request }) {
+  async handle(c: { env: Bindings, req: Request }) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { pageId } = data.params;
 
     const { programId, envId } = determineProgramIdAndEnvId(
-      c.env.ENVIRONMENT, 
-      c.request?.url,
+      c.env.WORKER_ENV, 
+      c.req.url,
       data.headers
     );
     console.log("programId:", programId);

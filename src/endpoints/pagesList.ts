@@ -6,7 +6,7 @@ import { determineAemSiteNameBySiteId, determinePageInfoByAemSiteNameAndPagePath
 import { handleErrors } from "utils/aem-fetch";
 import { getAEMContext } from "utils/ctx";
 import { PageInfo } from "PageInfo";
-
+import { Bindings } from "types";
 export class PagesList extends OpenAPIRoute {
   schema = {
     tags: ["Pages"],
@@ -46,7 +46,7 @@ export class PagesList extends OpenAPIRoute {
     },
   };
 
-  async handle(c: any) {
+  async handle(c: { env: Bindings, request: Request }) {
     const data = await this.getValidatedData<typeof this.schema>();
     console.log("Validated Data (Query):", data.query);
     console.log("Validated Data (Headers):", data.headers);
@@ -54,7 +54,7 @@ export class PagesList extends OpenAPIRoute {
     const { parentPageId, siteId, path, pathMatchType, cursor, limit } = data.query;
 
     const { programId, envId } = determineProgramIdAndEnvId(
-      c.env.ENVIRONMENT, 
+      c.env.WORKER_ENV, 
       c.request?.url,
       data.headers
     );

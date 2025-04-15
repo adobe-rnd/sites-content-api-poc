@@ -9,6 +9,7 @@ import {
 import { getAEMContext } from "../utils/ctx";
 import { PageInfo } from "../PageInfo";
 import { determineProgramIdAndEnvId } from "../utils/request-context";
+import { Bindings } from "types";
 
 export class PagesFetchByUrl extends OpenAPIRoute {
   schema = {
@@ -49,7 +50,7 @@ export class PagesFetchByUrl extends OpenAPIRoute {
   };
 
 
-  async handle(c: any) {
+  async handle(c: { env: Bindings, req: Request }) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { url } = data.query;
     console.log("Incoming Page URL:", url);
@@ -67,8 +68,8 @@ export class PagesFetchByUrl extends OpenAPIRoute {
     const { siteId, pagePath } = xwalkPageDetails;
 
     const { programId, envId } = determineProgramIdAndEnvId(
-      c.env.ENVIRONMENT, 
-      c.request?.url,
+      c.env.WORKER_ENV, 
+      c.req.url,
       data.headers
     );
     console.log("programId:", programId);

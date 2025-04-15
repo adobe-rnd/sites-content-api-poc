@@ -4,6 +4,7 @@ import { PageSchema, ProblemDetailsSchema } from '../schemas';
 import {  getAEMContext } from 'utils/ctx';
 import { fetchAEMJson, handleErrors } from 'utils/aem-fetch';
 import { Bindings } from 'types';
+import { determineProgramIdAndEnvId } from 'utils/request-context';
 
 export class PagesFetchById extends OpenAPIRoute {
   schema = {
@@ -30,12 +31,18 @@ export class PagesFetchById extends OpenAPIRoute {
     },
   };
 
-  async handle(c: { env: Bindings }) {
+  async handle(c: { env: Bindings, req: Request }) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { pageId } = data.params;
 
-    const ctx = getAEMContext(c.env, c.env.AEM_API_KEY, c.env.ENVIRONMENT);
-    
+    const { programId, envId } = determineProgramIdAndEnvId(
+      c.env.WORKER_ENV, 
+      c.req.url,
+      data.headers
+    );
+    console.log("programId:", programId);
+    console.log("envId:", envId);
+    const ctx = getAEMContext(c.env, programId, envId);
     try {
       const page = await fetchAEMJson(ctx, pageId);
 
