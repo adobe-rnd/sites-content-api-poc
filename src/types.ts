@@ -10,7 +10,13 @@ export const Task = z.object({
 });
 
 export type Bindings = {
-  AEM_AUTHOR_HOST: string
-  AEM_API_KEY: string
-}
+  AEM_AUTHOR_HOST: string;
+  AEM_API_KEY: string;
+};
 
+export type BlockField = { name: string; collapsed: string[] };
+
+export type BlockFieldGroup = {
+  name: string;
+  fields: BlockField[];
+};
