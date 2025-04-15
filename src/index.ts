@@ -6,8 +6,6 @@ import { PagesFetchByUrl } from "./endpoints/pagesFetchByUrl";
 import { PagesContentById } from "./endpoints/pagesContentById";
 import { Bindings } from "types";
 
-const API_BASE_PATH = "/adobe/experimental/aspm-expires-20251231";
-
 const app = new Hono<{ Bindings: Bindings }>()
 
 const openapi = fromHono(app, {
@@ -15,9 +13,9 @@ const openapi = fromHono(app, {
 });
 
 // Define specific route before parameterized one
-openapi.get(`${API_BASE_PATH}/pages/byUrl`, PagesFetchByUrl);
-openapi.get(`${API_BASE_PATH}/pages/:pageId`, PagesFetchById);
-openapi.get(`${API_BASE_PATH}/pages/:pageId/content`, PagesContentById);
-openapi.get(`${API_BASE_PATH}/pages`, PagesList);
+openapi.get(`/adobe/pages/byUrl`, PagesFetchByUrl);
+openapi.get(`/adobe/pages/:pageId`, PagesFetchById);
+openapi.get(`/adobe/pages/:pageId/content`, PagesContentById);
+openapi.get(`/adobe/pages`, PagesList);
 
 export default app;
