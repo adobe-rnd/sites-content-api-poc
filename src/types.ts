@@ -1,18 +1,7 @@
-import { DateTime, Str } from 'chanfana';
-import { z } from 'zod';
-
-export const Task = z.object({
-  name: Str({ example: 'lorem' }),
-  slug: Str(),
-  description: Str({ required: false }),
-  completed: z.boolean().default(false),
-  due_date: DateTime(),
-});
-
 export type Bindings = {
-  AEM_AUTHOR_HOST: string;
-  AEM_API_KEY: string;
-};
+  AEM_API_KEY: string,
+  ENVIRONMENT: string
+}
 
 export type BlockField = { name: string; collapsed: string[] };
 

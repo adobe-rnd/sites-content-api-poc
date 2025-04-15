@@ -7,11 +7,10 @@ export interface AEMContext {
   authToken: string;
 }
 
-export function getAEMContext(env: Bindings): AEMContext {
+export function getAEMContext(env: Bindings, programId: string, envId: string): AEMContext {
   return {
-    host: env.AEM_AUTHOR_HOST,
+    host: `author-p${programId}-e${envId}.adobeaemcloud.com`,
     authToken: env.AEM_API_KEY
-    ,
   };
 }
 

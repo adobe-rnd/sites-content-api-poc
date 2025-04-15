@@ -9,7 +9,11 @@
 	"compatibility_date": "2025-04-07",
 	"observability": {
 		"enabled": true
+	},
+	"dev": {
+		"port": 8787
 	}
+
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
