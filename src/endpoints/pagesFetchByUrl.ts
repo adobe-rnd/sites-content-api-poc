@@ -18,7 +18,7 @@ export class PagesFetchByUrl extends OpenAPIRoute {
     description: "Retrieves a page resource based on its public URL.",
     request: {
       query: z.object({
-        url: Str({ description: "The full public URL of the page, e.g. https://xwalk-renderer.adobeaem.workers.dev/xwalkpage/130360:1272151:1534567d-9937-4e40-85ff-369a8ed45367/main/index.html" })
+        url: Str({ description: "The full public URL of the page, e.g. https://xwalk-renderer.adobeaem.workers.dev/xwalkpages/130360:1272151:1534567d-9937-4e40-85ff-369a8ed45367/main/index.html" })
       }),
       headers: z.object({
         'X-ADOBE-ROUTING': z.string().describe('Adobe routing information containing program and environment IDs. Example: ...,program=130360,environment=1272151,...'),
@@ -54,7 +54,7 @@ export class PagesFetchByUrl extends OpenAPIRoute {
     const { url } = data.query;
     console.log("Incoming Page URL:", url);
 
-    // an xwalk page url looks like this: https://xwalk-renderer.adobeaem.workers.dev/xwalkpage/1534567d-9937-4e40-85ff-369a8ed45367/main/foobar/index.html
+    // an xwalk page url looks like this: https://xwalk-renderer.adobeaem.workers.dev/xwalkpages/1534567d-9937-4e40-85ff-369a8ed45367/main/foobar/index.html
     const xwalkPageDetails = parseXWalkPageFetchUrl(url);
     console.log("xwalkPageDetails:", xwalkPageDetails);
 
@@ -105,20 +105,20 @@ export class PagesFetchByUrl extends OpenAPIRoute {
   }
 }
 
-// Path is like this: https://xwalk-renderer.adobeaem.workers.dev/xwalkpage/1534567d-9937-4e40-85ff-369a8ed45367/main/foobar/index.html
+// Path is like this: https://xwalk-renderer.adobeaem.workers.dev/xwalkpagesss/1534567d-9937-4e40-85ff-369a8ed45367/main/foobar/index.html
 function parseXWalkPageFetchUrl(url: string): { siteId: string; pagePath: string } | null {
   try {
     const parsedUrl = new URL(url);
     const pathname = parsedUrl.pathname;
     const pathSegments = pathname.split('/').filter(segment => segment.length > 0);
 
-    const xwalkPageIndex = pathSegments.indexOf('xwalkpage');
+    const xwalkPageIndex = pathSegments.indexOf('xwalkpages');
     if (xwalkPageIndex === -1 || pathSegments.length <= xwalkPageIndex + 1) {
-      console.error("URL pattern mismatch: 'xwalkpage' segment not found or no siteId present.", url);
+      console.error("URL pattern mismatch: 'xwalkpages' segment not found or no siteId present.", url);
       return null;
     }
 
-    // Site ID is the segment immediately after 'xwalkpage'
+    // Site ID is the segment immediately after 'xwalkpages'
     const siteIdSegment = pathSegments[xwalkPageIndex + 1];
     // Extract the UUID part, expected after the last colon if present, or the whole segment
     const siteIdParts = siteIdSegment.split(':');
