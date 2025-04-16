@@ -16,15 +16,16 @@ import { fromHtml } from 'hast-util-from-html';
 import { format } from 'hast-util-format';
 import { Element, Root } from 'hast';
 import { createField, groupFields } from './blocks';
+import { AEMContext } from './ctx';
 
 /**
  * Converts AEM JSON content to HTML
  * @param content The AEM JSON content
  * @returns HTML string representation of the content
  */
-export function json2html(content: any): string {
+export function json2html(content: any, ctx: AEMContext): string {
   const head = createHead(content);
-  const main = createMain(content);
+  const main = createMain(content, ctx);
   const doc = createDocument(head, main, content.htmlLang);
   format(doc);
   return toHtml(doc as any, {
@@ -76,7 +77,7 @@ function createHead(json: any): Element {
   return head;
 }
 
-function createMain(json: any): Element {
+function createMain(json: any, ctx: AEMContext): Element {
   const main = h('main');
   const contentNode = json['jcr:content'];
 
@@ -90,7 +91,7 @@ function createMain(json: any): Element {
           continue;
         }
         if (typeof value === 'object' && value !== null) {
-          main.children.push(createSection(value));
+          main.children.push(createSection(value, ctx));
         }
       }
     }
@@ -99,7 +100,7 @@ function createMain(json: any): Element {
   return main;
 }
 
-function createSection(sectionJson: any): Element {
+function createSection(sectionJson: any, ctx: AEMContext): Element {
   if (!sectionJson) return null;
 
   const section = h('div');
@@ -115,16 +116,16 @@ function createSection(sectionJson: any): Element {
           section.children.push(createText(value));
           break;
         case 'core/franklin/components/image/v1/image':
-          section.children.push(createImage(value));
+          section.children.push(createImage(value, ctx));
           break;
         case 'core/franklin/components/button/v1/button':
           section.children.push(createButton(value));
           break;
         case 'core/franklin/components/block/v1/block':
-          section.children.push(createBlock(value));
+          section.children.push(createBlock(value, ctx));
           break;
         case 'core/franklin/components/columns/v1/columns':
-          section.children.push(createColumns(value));
+          section.children.push(createColumns(value, ctx));
           break;
       }
     }
@@ -144,9 +145,6 @@ function createSection(sectionJson: any): Element {
   return section;
 }
 
-
-
-
 function createTitle(jcrJson: any): Element {
   const type = jcrJson.type || jcrJson.titleType || 'h1';
   return h(type, jcrJson.title || jcrJson['jcr:title'] || '');
@@ -156,9 +154,13 @@ function createText(jcrJson: any): Element {
   return fromHtml(jcrJson.text || '', { fragment: true });
 }
 
-function createImage(jcrJson: any): Element {
+function createImage(jcrJson: any, ctx: AEMContext): Element {
   // TODO support image caption via "title"
-  return h('img', { src: jcrJson.image || jcrJson['fileReference'], alt: jcrJson.imageAlt || jcrJson.alt });
+  let src = jcrJson.image || jcrJson['fileReference'];
+  if (src.startsWith('/content/dam/')) {
+    src = `https://${ctx.publishHost}${src}`;
+  }
+  return h('img', { src, alt: jcrJson.imageAlt || jcrJson.alt });
 }
 
 
@@ -176,7 +178,7 @@ function createButton(jcrJson: any, ): Element {
   return button;
 }
 
-function createBlock(jsonJson: any): Element {
+function createBlock(jsonJson: any, ctx: AEMContext): Element {
   const model = jsonJson.model;
   if (model) {
     const classNames = [model];
@@ -192,7 +194,7 @@ function createBlock(jsonJson: any): Element {
         const cell = h('div');
         const row = h('div', cell);
         group.fields.forEach((field) => {
-          const fieldElement = createField(jsonJson, field);
+          const fieldElement = createField(jsonJson, field, ctx);
           if (fieldElement) {
             cell.children.push(fieldElement);
           }
@@ -207,14 +209,15 @@ function createBlock(jsonJson: any): Element {
 
       for (const blockItem of blockItems) {
         const blockItemJson = jsonJson[blockItem];
+        const blockRow = h('div');
         const groups = groupFields(blockItemJson.modelFields);
-
         groups.forEach((group) => {
-          const fieldElement = createField(blockItemJson, group.fields[0]);
+          const fieldElement = createField(blockItemJson, group.fields[0], ctx);
           if (fieldElement) {
-            block.children.push(h('div', h('div', fieldElement)));
+            blockRow.children.push(h('div', fieldElement));
           }
         });
+        block.children.push(blockRow);
       }
     }
     return block;
@@ -222,7 +225,7 @@ function createBlock(jsonJson: any): Element {
   return null;
 }
 
-function createColumns(jcrJson: any): Element {
+function createColumns(jcrJson: any, ctx: AEMContext): Element {
   const rows = jcrJson.rows;
   const columns = jcrJson.columns;
   const classNames = ['columns'];
@@ -245,7 +248,7 @@ function createColumns(jcrJson: any): Element {
             blockCell.children.push(createText(cellItem));
             break;
           case 'core/franklin/components/image/v1/image':
-            blockCell.children.push(createImage(cellItem));
+            blockCell.children.push(createImage(cellItem, ctx));
             break;
         }
       });

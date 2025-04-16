@@ -47,10 +47,7 @@ export class PagesContentById extends OpenAPIRoute {
   async handle(c: { env: Bindings, req: Request }) {
     const data = await this.getValidatedData<typeof this.schema>();
     const { pageId } = data.params;
-
     const { programId, envId } = determineProgramIdAndEnvId(data.headers);
-    console.log("programId:", programId);
-    console.log("envId:", envId);
     const ctx = getAEMContext(c.env, programId, envId);
     try {
       const page = await fetchAEMJson(ctx, pageId, 7);
@@ -70,7 +67,7 @@ export class PagesContentById extends OpenAPIRoute {
         );
       }
 
-      const html = json2html(page);
+      const html = json2html(page, ctx);
       return new Response(html, {
         headers: { 'Content-Type': 'text/html' },
       });

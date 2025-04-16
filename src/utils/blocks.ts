@@ -2,6 +2,7 @@ import { Element } from "hast";
 import { fromHtml } from "hast-util-from-html";
 import { h } from "hastscript";
 import { BlockField, BlockFieldGroup } from "types";
+import { AEMContext } from "./ctx";
 
 /*
  * Copyright 2025 Adobe. All rights reserved.
@@ -68,7 +69,7 @@ export function groupFields(modelFields: any): BlockFieldGroup[] {
   return fields;
 }
 
-export function createField(blockJson: any, field: BlockField): Element | null {
+export function createField(blockJson: any, field: BlockField, ctx: AEMContext): Element | null {
   const value = blockJson[field.name];
 
   if (!value) {
@@ -77,8 +78,9 @@ export function createField(blockJson: any, field: BlockField): Element | null {
 
   if (value.startsWith('/')) {
     if (value.startsWith('/content/dam/')) {
+        const src = `https://${ctx.publishHost}${value}`;
         const alt = blockJson[`${field.name}Alt`] || '';
-        return h('img', { src: value, alt });
+        return h('img', { src, alt });
     } else {
         const text = blockJson[`${field.name}Text`] || '';
         return h('a', { href: value, text });
