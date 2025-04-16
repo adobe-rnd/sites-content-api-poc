@@ -45,7 +45,7 @@ function createDocument(head: Element, main: Element, htmlLang: string): Root {
   };
 }
 
-function createHead(json: any) {
+function createHead(json: any): Element {
   const head = h('head');
   const contentNode = json['jcr:content'];
   if (contentNode) {
@@ -76,7 +76,7 @@ function createHead(json: any) {
   return head;
 }
 
-function createMain(json: any) {
+function createMain(json: any): Element {
   const main = h('main');
   const contentNode = json['jcr:content'];
 
@@ -99,7 +99,7 @@ function createMain(json: any) {
   return main;
 }
 
-function createSection(sectionJson: any) {
+function createSection(sectionJson: any): Element {
   if (!sectionJson) return null;
 
   const section = h('div');
@@ -109,32 +109,22 @@ function createSection(sectionJson: any) {
       const type = value['sling:resourceType'];
       switch (type) {
         case 'core/franklin/components/title/v1/title':
-          section.children.push(h('h1', value.title || value['jcr:title'] || ''));
+          section.children.push(createTitle(value));
           break;
         case 'core/franklin/components/text/v1/text':
-          section.children.push(fromHtml(value.text || '', { fragment: true }));
+          section.children.push(createText(value));
           break;
         case 'core/franklin/components/image/v1/image':
-          section.children.push(h('img', { src: value.image || value['fileReference'], alt: value.imageAlt || value.alt }));
+          section.children.push(createImage(value));
           break;
         case 'core/franklin/components/button/v1/button':
-          const buttonType = value.linkType || 'link';
-          switch (buttonType) {
-            case 'primary':
-              section.children.push(
-                h('strong', h('a', { href: value.link as string }, value.linkText as string))
-              );
-              break;
-            case 'secondary':
-              section.children.push(h('em', h('a', { href: value.link }, value.linkText)));
-              break;
-            default:
-              section.children.push(h('a', { href: value.link }, value.linkText));
-              break;
-          }
+          section.children.push(createButton(value));
           break;
         case 'core/franklin/components/block/v1/block':
           section.children.push(createBlock(value));
+          break;
+        case 'core/franklin/components/columns/v1/columns':
+          section.children.push(createColumns(value));
           break;
       }
     }
@@ -154,19 +144,55 @@ function createSection(sectionJson: any) {
   return section;
 }
 
-function createBlock(blockJson: any) {
-  const model = blockJson.model;
+
+
+
+function createTitle(jcrJson: any): Element {
+  const type = jcrJson.type || jcrJson.titleType || 'h1';
+  return h(type, jcrJson.title || jcrJson['jcr:title'] || '');
+}
+
+function createText(jcrJson: any): Element {
+  return fromHtml(jcrJson.text || '', { fragment: true });
+}
+
+function createImage(jcrJson: any): Element {
+  // TODO support image caption via "title"
+  return h('img', { src: jcrJson.image || jcrJson['fileReference'], alt: jcrJson.imageAlt || jcrJson.alt });
+}
+
+
+function createButton(jcrJson: any, ): Element {
+  const buttonType = jcrJson.linkType || 'link';
+  let button = h('a', { href: jcrJson.link }, jcrJson.linkText);
+  switch (buttonType) {
+    case 'primary':
+      button = h('strong', h('a', { href: jcrJson.link as string }, jcrJson.linkText as string));
+      break;
+    case 'secondary':
+      button = h('em', h('a', { href: jcrJson.link }, jcrJson.linkText));
+      break;
+  }
+  return button;
+}
+
+function createBlock(jsonJson: any): Element {
+  const model = jsonJson.model;
   if (model) {
-    const block = h('div', { class: model });
-    if (blockJson.modelFields) {
+    const classNames = [model];
+    if (jsonJson.classes) {
+      classNames.push(...jsonJson.classes.split(','));
+    }
+    const block = h('div', { class: classNames.join(' ') });
+    if (jsonJson.modelFields) {
       // simple blocks
-      const groups = groupFields(blockJson.modelFields);
+      const groups = groupFields(jsonJson.modelFields);
 
       groups.forEach((group) => {
         const cell = h('div');
         const row = h('div', cell);
         group.fields.forEach((field) => {
-          const fieldElement = createField(blockJson, field);
+          const fieldElement = createField(jsonJson, field);
           if (fieldElement) {
             cell.children.push(fieldElement);
           }
@@ -175,12 +201,12 @@ function createBlock(blockJson: any) {
       });
     } else {
       // container blocks
-      const blockItems = Object.entries(blockJson)
+      const blockItems = Object.entries(jsonJson)
         .filter(([key, value]) => typeof value === 'object' && value !== null && value.modelFields)
         .map(([key, value]) => key);
 
       for (const blockItem of blockItems) {
-        const blockItemJson = blockJson[blockItem];
+        const blockItemJson = jsonJson[blockItem];
         const groups = groupFields(blockItemJson.modelFields);
 
         groups.forEach((group) => {
@@ -195,3 +221,38 @@ function createBlock(blockJson: any) {
   }
   return null;
 }
+
+function createColumns(jcrJson: any): Element {
+  const rows = jcrJson.rows;
+  const columns = jcrJson.columns;
+  const classNames = ['columns'];
+  if (jcrJson.classes) {
+    classNames.push(...jcrJson.classes.split(','));
+  }
+  const block = h('div', { class: classNames.join(' ') });
+
+  Object.entries(jcrJson).filter(([key, value]) => typeof value === 'object' && value !== null).forEach(([key, row]) => {
+    const blockRow = h('div'); // the row
+    Object.entries(row).filter(([key, value]) => typeof value === 'object' && value !== null).forEach(([key, cell]) => {
+      const blockCell = h('div'); // the cell
+      Object.entries(cell).filter(([key, value]) => typeof value === 'object' && value !== null).forEach(([key, cellItem]) => {
+        const type = cellItem['sling:resourceType'];
+        switch (type) {
+          case 'core/franklin/components/title/v1/title':
+            blockCell.children.push(createTitle(cellItem));
+            break;
+          case 'core/franklin/components/text/v1/text':
+            blockCell.children.push(createText(cellItem));
+            break;
+          case 'core/franklin/components/image/v1/image':
+            blockCell.children.push(createImage(cellItem));
+            break;
+        }
+      });
+      blockRow.children.push(blockCell);
+    });
+    block.children.push(blockRow);
+  });
+  return block;
+}
+

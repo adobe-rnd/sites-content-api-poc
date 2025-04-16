@@ -53,7 +53,7 @@ export class PagesContentById extends OpenAPIRoute {
     console.log("envId:", envId);
     const ctx = getAEMContext(c.env, programId, envId);
     try {
-      const page = await fetchAEMJson(ctx, pageId, 6);
+      const page = await fetchAEMJson(ctx, pageId, 7);
 
       if (!page) {
         return new Response(
