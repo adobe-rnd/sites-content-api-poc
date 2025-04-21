@@ -4,10 +4,14 @@ info:
   description: |
     This Data Plane API enables management of Pages within Adobe Experience Manager (AEM) as a Cloud Service.
 
-    In this implementation, Pages need to be associated to a Site via a siteId at creation time. A page cannot be moved
-    to a site of a different type (i.e. `aem` or `aem-edge`) than the one it was associated at creation time.
+    Each Page has a mandatory `sourceType` property (e.g., `aem` or `aem-edge`), indicating its underlying
+    storage system and capabilities. While `aem` and `aem-edge` are the primary supported types with specific
+    validation rules (requiring association with a corresponding `Site` via `siteId`), other string values for `sourceType`
+    representing future integrations may appear. For Pages with `sourceType` `aem` or `aem-edge`, the Page's `sourceType`
+    must match the `sourceType` defined on the associated Site. Pages cannot be moved between Sites with different
+    `sourceType` values.
 
-    All identifiers (PageId, VersionId, TemplateId) are unique, opaque strings specific to the underlying 
+    All identifiers (PageId, SiteId, TemplateId) are unique, opaque strings specific to the underlying 
     content repository implementation. These identifiers may differ across environments (e.g. dev, staging, prod) even 
     when using the same repository implementation. However, identifiers remain stable within the same environment even 
     when resources are relocated within the same content repository (for example, when a page is moved to a different site).
@@ -177,6 +181,65 @@ info:
 
     The conflict must then be resolved by the caller, by either accepting the values from
     the server, or by overwriting them.
+
+    #### API Evolution and Deprecation Policy
+
+    This API aims for predictable evolution. Changes, especially potentially breaking ones,
+    are managed through the following mechanisms:
+
+    **1. Schema Versioning (`v=N` Parameter) and Experimental Profiles:**
+    Breaking changes to the schema of the unified `application/json` representation
+    (`UnifiedPageContent`) are introduced via new versions indicated by the `v`
+    parameter in the `Accept` and `Content-Type` headers (e.g., `application/json; v=1`).
+
+    *   **Important Note on Experimental Profiles:** Profiles containing "experimental" (e.g., `profile=experimental-xyz`)
+        signal experimental server-side features, processing, or the inclusion of additional non-standard data fields.
+        However, they **must not** introduce breaking changes to the core schema structure defined by the requested
+        base media type and version (e.g., `application/json; v=0`). Clients should be able to parse the response
+        according to the `v=N` schema and safely ignore any experimental additions. Breaking schema changes to the
+        `UnifiedPageContent` representation (when requested via `application/json`) should only be introduced by
+        incrementing the version parameter (e.g., requesting `v=N+1`).
+
+    **2. Deprecation Process:**
+    When a specific schema version (e.g., `v=0`), profile, or feature is planned for removal,
+    the following steps will generally be taken:
+      *   **Announcement:** The feature will be marked as deprecated in this specification (using
+          `deprecated: true` where applicable, and through descriptions) and in API documentation.
+          A target removal ("sunset") date will be announced.
+      *   **`Sunset` Header:** Responses utilizing the deprecated feature will include the standard
+          `Sunset` HTTP header (RFC 8594), indicating the date after which the feature will no
+          longer be available. Example: `Sunset: Tue, 31 Dec 2025 23:59:59 GMT`.
+      *   **`Warning` Header:** Responses may also include a `Warning` header (RFC 7234, code 299)
+          with a human-readable deprecation message and a link to migration guides.
+      *   **Monitoring:** Usage of deprecated features will be monitored via server-side logging to
+          track migration progress.
+      *   **Brownouts (Optional):** As the sunset date approaches, temporary "brownouts" may occur,
+          where the deprecated feature is temporarily unavailable for short, announced periods,
+          returning an appropriate error (e.g., `406 Not Acceptable` or `503 Service Unavailable`)
+          to encourage migration. Brownout schedules will be communicated in advance.
+      *   **Removal:** After the sunset date, server logic for the deprecated feature will be removed.
+          Requests for the removed feature will permanently fail, typically with a `406 Not Acceptable` error.
+
+    **3. Changing Default Version:**
+    The default schema version used when clients request `Accept: application/json` without
+    a `v` parameter (initially `v=0`) may change in the future. This process involves:
+      *   **Advance Announcement:** The deprecation of the current default version (e.g., `v=0`) and the
+          designation of the future default version (e.g., `v=1`) will be announced well in advance,
+          along with the sunset date for the old version.
+      *   **Client Migration (Recommended):** Clients should migrate by:
+          *   Testing their application against the designated future default version by explicitly
+            requesting it (e.g., `Accept: application/json; v=1`).
+          *   Updating their production code to **explicitly request the new version** (e.g., `Accept: application/json; v=1`)
+            *before* the sunset date of the old default version.
+          *   **Maintaining the explicit version request** is the recommended practice for ongoing stability,
+            rather than relying on the implicit default which may change again in the future.
+      *   **Server-Side Sequence:**
+          *   The old default version (e.g., `v=0`) undergoes the full deprecation process (Point 2).
+          *   On the sunset date, the logic for the old default version is removed. Requests still implicitly or
+            explicitly targeting it will fail (e.g., `406 Not Acceptable`).
+          *   Following removal, the server configuration is updated to make the new version (e.g., `v=1`)
+            the default for requests without an explicit `v` parameter (`Accept: application/json`).
+
   version: 0.0.16
 servers:
   - url: /adobe
@@ -324,7 +387,15 @@ paths:
       tags:
         - Pages
       description: |
-        Creates a Page in a Site.
+        Creates a Page. The `sourceType` field is mandatory in the request body.
+
+        If the provided `sourceType` is `aem` or `aem-edge`, the `siteId` field also becomes
+        mandatory for this request. The server will validate that the provided `siteId` refers
+        to an existing Site and that the Page's `sourceType` matches the `sourceType` property of that Site.
+        If validation fails, a `400 Bad Request` or `409 Conflict` may be returned.
+
+        If the provided `sourceType` is a value not recognized or currently supported by the server implementation,
+        a `400 Bad Request` error will be returned, potentially with details indicating the unsupported type.
 
         The created page will be empty, unless the `templateId` property in the
         request payload is set to provide initial content.
@@ -472,6 +543,9 @@ paths:
       description: |
         Edits the properties of a Page identified by its `pageId` and/or moves the Page.
 
+        The `sourceType` of a Page cannot be changed after creation. Moving the Page is only permitted if the target location
+        remains within a Site of the same `sourceType` (implying the `siteId` cannot change once assigned).
+
         To move the Page to a new path, set the `path` property to
         the desired value. If a Page at the new path already exists, the API replies with a `409` HTTP status.
 
@@ -600,19 +674,95 @@ paths:
     get:
       operationId: pages.content.get
       summary: Get Page Content
-      description: Retrieves the content of a Page identified by its `pageId`.
+      description: >
+        Retrieves the content for a specific page, identified by its `pageId`.
+        The response format depends on the `Accept` header, typically `application/json`,
+        potentially with parameters for versioning (`v=...`) or profiles (`profile=...`).
+
+        The server determines the `sourceType` of the **Page itself**. The ability
+        to return a specific representation depends on whether that `sourceType` (which could be `aem`, `aem-edge`, or a future value) is
+        supported for the requested target format, version, and profile.
+
+
+        **Profile Parameter Usage:**
+
+        The `profile` parameter allows requesting alternative processing or representations
+        compared to the standard unified JSON model specified by the version (`v=N`).
+
+        - **`profile=sourceSpecific`**: Requests source-specific handling instead of the standard unified JSON.
+          The actual response depends on the **Page's `sourceType`** and server policy for this profile. For example, it might
+          trigger a redirect (3xx) if the `sourceType` is `aem`, return an alternative, potentially
+          non-unified JSON structure (200 OK) for others, or result in an error (e.g., 406 Not Acceptable) if the profile
+          is inapplicable to the **Page's `sourceType`** (like `aem-edge`).
+        - Note: For details on schema stability guarantees, especially concerning experimental profiles,
+          please refer to the main **API Evolution and Deprecation Policy** section in the API's info description.
+
+        Examples:
+        - **`Accept: application/json`** (defaults to **`v=0`**):
+          - Requests the standard unified JSON representation for the specified version (`v=0` by default).
+          - *Initial Behavior:* If the **Page's `sourceType`** is `aem-edge`, returns the `v=0`
+            unified JSON (`UnifiedPageContent`). If the source type is `aem`,
+            returns **`406 Not Acceptable`**.
+          - *Potential Future Behavior for `v=0`:* Server updates **may** expand support within `v=0`
+            to also handle sources like `aem`, causing a transition from `406` to `200 OK` for those sources.
+        - **`Accept: application/json; v=1`**:
+          - Explicitly requests `v=1` of the unified JSON. Success depends on `v=1` supporting the **Page's `sourceType`**.
+          - If `v=1` does not support the **Page's `sourceType`**, the server will return a **`406 Not Acceptable`** error.
+        - **`Accept: application/json; profile=sourceSpecific`**:
+          - Requests source-specific handling instead of the standard unified JSON representation. The actual response
+            depends on the **Page's `sourceType`** and the server's policy for this profile:
+          - If the **Page's `sourceType`** is `aem`, the server triggers a **`307 Temporary Redirect`**
+            response with the `Location` header pointing to the original AEM resource.
+          - If the **Page's `sourceType`** is `aem-edge`, this profile is inapplicable (as `aem-edge` uses
+            the standard unified JSON), resulting in a **`406 Not Acceptable`**.
+          - For future source types (e.g., Google Docs), this profile might result in a **`200 OK`** with a
+            different, source-specific JSON structure, or potentially a redirect, depending on the implementation strategy.
+        - **Other Profiles**: Additional profiles (e.g., `profile=experimental-google-doc`) may be defined for specific purposes.
+          Refer to the main API Evolution policy regarding schema stability for experimental profiles.
+
       tags:
         - Pages
       responses:
         '200':
-          description: OK
+          description: OK - Unified JSON content returned successfully (typically when no profile or a matching profile for direct JSON is requested).
           headers:
             ETag:
               $ref: '#/components/headers/ETag'
-          content:
-            text/html:
+            Optional: Sunset header
+            Vary:
               schema:
-                $ref: '#/components/schemas/HTML'
+                type: string
+                example: Accept
+              description: Indicates the set of request-header fields that determines the representation chosen for the response, as required by content negotiation. Crucial for correct caching.
+          content:
+            application/json: # Now the primary success response type
+              schema:
+                $ref: '#/components/schemas/UnifiedPageContent'
+              examples:
+                aemEdgeExample: # Example valid if sourceType is aem-edge and profile is not specified or matches
+                  summary: Example for AEM Edge sourced content (Unified JSON v=0)
+                  value:
+                    content: { /* ... v=0 unified JSON structure ... */ }
+                    redirectUrl: null
+        '307':
+          description: >
+             Found (Redirect) - The requested resource resides temporarily under a different URI.
+             Typically triggered when requesting `application/json` with a `profile=sourceSpecific` parameter
+             for a resource whose **Page `sourceType`** (e.g., `aem`) is configured
+             to be handled via redirection for that profile.
+          headers:
+            Location:
+              description: The redirection target URI.
+              schema:
+                type: string
+                format: uri
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Vary:
+              schema:
+                type: string
+                example: Accept
+              description: Required because the decision to redirect vs. serve content depends on the Accept header profile parameter.
         '400':
           $ref: '#/components/responses/400_BadRequest'
         '401':
@@ -620,39 +770,143 @@ paths:
         '404':
           $ref: '#/components/responses/404_NotFound'
         '406':
-          $ref: '#/components/responses/406_Unacceptable'
+           description: >
+             Not Acceptable - The server cannot produce a response matching the requested `Accept` header,
+             including its parameters (`v`, `profile`). This could be due to:
+             1. Requesting a base type/version (e.g., `application/json; v=0`) for a resource whose
+                underlying `sourceType` is not supported for unified processing in that version.
+             2. Requesting a `profile` (e.g., `profile=sourceSpecific`) for a resource whose `sourceType` does not
+                support or require that profile's specific behavior (e.g., requesting `sourceSpecific` for `aem-edge`).
+           headers:
+             Vary:
+               schema:
+                 type: string
+                 example: Accept
+               description: The 406 error is a direct result of the Accept header negotiation.
+           $ref: '#/components/responses/406_Unacceptable'
         '500':
           $ref: '#/components/responses/500_InternalServerError'
+        '501':
+           $ref: '#/components/responses/501_NotImplemented'
+    head:
+      operationId: pages.content.head
+      summary: Check Page Content Existence and Headers
+      description: >
+        Performs the same content negotiation as the GET operation based on the `Accept` header
+        (including `v` and `profile` parameters) but returns only the headers without a response body.
+
+        This is useful for checking the existence of a specific representation, its `ETag` for caching,
+        or whether a specific request would result in a redirect, without transferring the full content.
+
+        The negotiation logic and potential success/error outcomes mirror the GET operation based on
+        the **Page's `sourceType`** (e.g., `aem`, `aem-edge`, or future types) and the requested `Accept` header parameters.
+      tags:
+        - Pages
+      responses:
+        '200':
+          description: OK - Headers indicate that a representation is available for the request.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Vary:
+              schema:
+                type: string
+                example: Accept
+              description: Indicates the set of request-header fields that determines the representation chosen, crucial for caching.
+            Content-Type:
+              schema:
+                type: string
+                example: application/json # Indicates the type GET would return
+              description: The media type that would be returned by a corresponding GET request.
+            Optional: Sunset header
+        '307': # Mirrors GET redirect
+          description: >
+             Found (Redirect) - Headers indicate the resource resides temporarily under a different URI,
+             based on the requested `Accept` profile (e.g., `profile=sourceSpecific` for `aem` sources).
+          headers:
+            Location:
+              description: The redirection target URI.
+              schema:
+                type: string
+                format: uri
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Vary:
+              schema:
+                type: string
+                example: Accept
+              description: Required because the decision to redirect vs. serve content depends on the Accept header profile parameter.
+        '400':
+          description: Bad Request (Headers Only)
+          $ref: '#/components/responses/400_BadRequest' # Reference standard response, but no body expected
+        '401':
+          description: Unauthorized (Headers Only)
+          $ref: '#/components/responses/401_Unauthorized'
+        '404':
+          description: Not Found (Headers Only)
+          $ref: '#/components/responses/404_NotFound'
+        '406':
+           description: Not Acceptable (Headers Only) - The server cannot produce a response matching the requested Accept header.
+           headers:
+             Vary:
+               schema:
+                 type: string
+                 example: Accept
+               description: The 406 error is a direct result of the Accept header negotiation.
+           $ref: '#/components/responses/406_Unacceptable' # Reference standard response structure
+        '500':
+          description: Internal Server Error (Headers Only)
+          $ref: '#/components/responses/500_InternalServerError'
+        '501':
+          description: Not Implemented (Headers Only)
+           $ref: '#/components/responses/501_NotImplemented'
     put:
       operationId: pages.content.replace
       tags:
         - Pages
       summary: Replace Page Content
-      description: |
+      description: >
         Replaces the content of a page identified by its `pageId`.
+        The behavior depends on the `Content-Type` header, potentially including
+        media type parameters for versioning (`v=...`) or profiles (`profile=...`).
 
-        See the _conflicts when saving data_ section in this API's description header
-        for how possible conflicts are handled when saving data.
+        The server will attempt to store the provided content into the page's underlying
+        `sourceType`. This might fail (e.g., with a `400 Bad Request` or `409 Conflict`)
+        if the provided representation (e.g., `application/json; v=0`)
+        cannot be validly transformed or stored for the specific target `sourceType`.
 
-        Edit requests should pass the most recent `ETag` value received from the server.
+
+        Examples:
+        - **`Content-Type: application/json`** (defaults to **`v=0`**): Replaces content assuming the `v=0` structure
+          of the `UnifiedPageContent` schema. This is expected to work if the target **Page's `sourceType`**
+          is `aem-edge`. It may fail
+          if the target `sourceType` is different and incompatible with storing the `v=0` format.
+        - **`Content-Type: application/json; v=1`**: Replaces content using the `v=1` structure. Success depends
+          on whether the target **Page's `sourceType`** is compatible with storing content in the `v=1` format.
+        - **Other `Content-Type`**: Support depends on implementation and specified version/profile and target **Page `sourceType`** compatibility.
+
+
+        See also the _conflicts when saving data_ section in this API\\\'s description header.
+        Edit requests should pass the most recent `ETag` value received from the server via the `If-Match` header.
       parameters:
         - $ref: '#/components/parameters/If-Match'
       requestBody:
         required: true
         content:
-          text/html:
+          application/json:
             schema:
-              $ref: '#/components/schemas/HTML'
+              $ref: '#/components/schemas/UnifiedPageContent' # Use the unified schema for input too
       responses:
         '200':
-          description: OK
+          description: OK - Content successfully replaced. The response body usually contains the updated resource representation.
           headers:
             ETag:
               $ref: '#/components/headers/ETag'
           content:
-            text/html:
+            # Respond with the unified JSON by default after update
+            application/json:
               schema:
-                $ref: '#/components/schemas/HTML'
+                $ref: '#/components/schemas/UnifiedPageContent'
         '400':
           $ref: '#/components/responses/400_BadRequest'
         '401':
@@ -663,6 +917,8 @@ paths:
           $ref: '#/components/responses/404_NotFound'
         '406':
           $ref: '#/components/responses/406_Unacceptable'
+        '409':
+           $ref: '#/components/responses/409_Conflict'
         '412':
           $ref: '#/components/responses/412_PreconditionFailed'
         '415':
@@ -671,6 +927,15 @@ paths:
           $ref: '#/components/responses/428_PreconditionRequired'
         '500':
           $ref: '#/components/responses/500_InternalServerError'
+        '501':
+           $ref: '#/components/responses/501_NotImplemented'
+
+    # Add HEAD, POST, DELETE, PATCH for /content as needed, following similar principles
+    # HEAD: Similar responses to GET but without body. Good for checking ETag/existence.
+    # POST: Might be used for partial updates or specific actions on content? Define semantics carefully.
+    # DELETE: To delete the content associated with the page? Or delete the page itself (usually done via /{pageId})? Clarify semantics.
+    # PATCH: Standard for partial updates, typically using application/merge-patch+json or application/json-patch+json.
+
   /{pageId}/versions:
     parameters:
       - $ref: '#/components/parameters/pageId'
@@ -1388,7 +1653,7 @@ components:
         siteId:
           type: string
           description: |
-            The id of the Site in which the Page will be created.
+            The id of the Site this Page belongs to. Mandatory and validated only if `sourceType` is "aem" or "aem-edge".
           readOnly: true
         parentPageId:
           type: string
@@ -1466,11 +1731,18 @@ components:
                   description: |
                     Link to edit the page. The client should redirect the browser to the specified `href` so that the user can
                     edit the page.
+        sourceType:
+          type: string
+          description: |
+            Indicates the underlying source system or format for this page's content. Determines storage and capabilities.
+            If its value is `aem` or `aem-edge`, it must match the sourceType of the associated Site (referenced via the mandatory siteId).
+            Immutable after creation. Clients should be prepared to handle potentially new string values beyond the current examples.
+          example: `aem-edge`
       required:
         - id
-        - siteId
         - path
         - title
+        - sourceType
       example:
         id: e7b8a6d2-4c3b-4f8b-9b2e-8f2b6a1d3e4f
         siteId: 123e4567-e89b-12d3-a456-426614174000
@@ -1545,13 +1817,22 @@ components:
     PageCreate:
       type: object
       description: |
-        Request payload to create a new Page in an AEM Site. `siteId` is mandatory and if parentPageId is specified 
-        it must be located in the same site. Otherwise, a `400` HTTP status is returned.
+        Request payload to create a new Page. `siteId` is mandatory for `aem` or `aem-edge`. If siteId and parentPageId is specified 
+        it must be made sure that the parentPageId is located in the same Site. Otherwise, a `400` HTTP status is returned.
       properties:
         siteId:
           type: string
           description: |
-            The id of the Site in which the Page will be created.
+            The id of the Site in which the Page will be created. Mandatory and validated against the Site's `sourceType`
+            only if the Page's `sourceType` is `aem` or `aem-edge`.
+        sourceType:
+          type: string
+          description: |
+            The source system type for the Page being created. This value is mandatory.
+            If set to `aem` or `aem-edge`, `siteId` must also be provided and validated against the Site's `sourceType`.
+            Future source types might be introduced; clients providing unrecognized types should expect potential errors
+            unless the type is explicitly supported by the server implementation.
+          example: `aem-edge`
         path:
           type: string
           description: |
@@ -1598,9 +1879,9 @@ components:
           items:
             $ref: '#/components/schemas/Field'
       required:
-        - siteId
         - path
         - title
+        - sourceType
     HTML:
       type: string
       description: |
@@ -1759,6 +2040,58 @@ components:
         - siteId
         - pageId
         - title
+    UnifiedPageContent:
+      type: object
+      description: A unified representation of page content, adaptable from various source media types.
+      properties:
+        content:
+          type: object # Or string, array - adapt based on your common content model
+          description: The core page content structured in a unified format.
+          # Example properties - DEFINE YOUR ACTUAL UNIFIED STRUCTURE HERE
+          properties:
+             mainTitle:
+               type: string
+             bodyHtml:
+               type: string
+             components:
+               type: array
+               items:
+                 type: object # Define structure of components
+          # Make sure this schema can represent content from all intended sources
+        redirectUrl:
+           type: string
+           format: uri
+           nullable: true
+           description: >
+             If present, indicates a URL where the original, non-unified content can be retrieved.
+             This may be populated when the server cannot fully represent the source content
+             in the unified JSON format for the requested API version, or if the client specifically
+             requested a format handled by redirection (like application/vnd.adobe.aem). Read-only.
+           readOnly: true
+      # Add required properties if applicable
+      # required:
+      #   - content
+
+    Site:
+      type: object
+      description: Represents a Site, which groups related Pages sharing the same underlying source type.
+      properties:
+        id:
+          type: string
+          description: The unique identifier of the Site.
+          readOnly: true
+        sourceType:
+          type: string
+          description: |
+            Defines the source system type (e.g., `aem`, `aem-edge`) for all Pages belonging to this Site.
+            Used to validate Pages created within or moved to this Site. While the examples focus on known types,
+            clients should be aware that other string values might represent valid Site types in some deployments. Read-only.
+          readOnly: true
+          example: `aem-edge`
+      required:
+        - id
+        - sourceType
+
   parameters:
     cursor:
       in: query

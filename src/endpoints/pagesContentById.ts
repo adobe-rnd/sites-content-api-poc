@@ -72,7 +72,7 @@ export class PagesContentById extends OpenAPIRoute {
         headers: { 'Content-Type': 'text/html' },
       });
     } catch (error) {
-      handleErrors(error);
+      return handleErrors(error);
     }
   }
 } 
