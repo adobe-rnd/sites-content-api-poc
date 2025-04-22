@@ -51,7 +51,7 @@ export class PagesContentById extends OpenAPIRoute {
     const ctx = getAEMContext(c.env, programId, envId);
     try {
       const page = await fetchAEMJson(ctx, pageId, 7);
-
+      console.log("page", page);
       if (!page) {
         return new Response(
           JSON.stringify({ title: "Not Found", status: 404, detail: `Content for page ID ${pageId} not found.` }),
