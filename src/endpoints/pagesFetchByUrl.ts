@@ -129,7 +129,7 @@ function parseXWalkPageFetchUrl(url: string): { siteId: string; pagePath: string
     // Site ID is the segment immediately after 'xwalkpages'
     const siteIdSegment = pathSegments[xwalkPageIndex + 1];
     // Extract the UUID part, expected after the last colon if present, or the whole segment
-    const siteIdParts = siteIdSegment.split('--');
+    const siteIdParts = siteIdSegment.split('_');
     const siteId = siteIdParts.length > 0 ? siteIdParts[siteIdParts.length - 1] : ''; // Get the last part
 
     // Validate UUID format for the extracted siteId
