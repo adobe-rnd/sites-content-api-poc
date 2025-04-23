@@ -18,7 +18,7 @@ export class PagesFetchByUrl extends OpenAPIRoute {
     description: "Retrieves a page resource based on its public URL.",
     request: {
       query: z.object({
-        url: Str({ description: "The full public URL of the page, e.g. https://xwalk-renderer.adobeaem.workers.dev/xwalkpages/130360:1272151:1534567d-9937-4e40-85ff-369a8ed45367/main/" })
+        url: Str({ description: "The full public URL of the page, e.g. https://xwalk-renderer.adobeaem.workers.dev/xwalkpages/p130360--e1272151--1534567d-9937-4e40-85ff-369a8ed45367/main/" })
       }),
       headers: z.object({
         'X-ADOBE-ROUTING': z.string().describe('Adobe routing information containing program and environment IDs. Example: ...,program=130360,environment=1272151,...'),
@@ -54,7 +54,7 @@ export class PagesFetchByUrl extends OpenAPIRoute {
     const { url } = data.query;
     console.log("Incoming Page URL:", url);
 
-    // an xwalk page url looks like this: https://xwalk-renderer.adobeaem.workers.dev/xwalkpages/130360:1272151:1534567d-9937-4e40-85ff-369a8ed45367/main/foobar/about
+    // an xwalk page url looks like this: https://xwalk-renderer.adobeaem.workers.dev/xwalkpages/p130360--e1272151--1534567d-9937-4e40-85ff-369a8ed45367/main/foobar/about
     // Helix will not fetch the index.html file like so /main/foobar/index.html instead it will fetch the path with a slash/main/foobar/
     // TODO ask Content API Working Group, it would be better to get a resolver endpoint:
     // https://author-p130360-e1272151.adobeaemcloud.com/adobe/sites/1534567d-9937-4e40-85ff-369a8ed45367/contentByPath/foobar/about
@@ -113,7 +113,7 @@ export class PagesFetchByUrl extends OpenAPIRoute {
   }
 }
 
-// Path is like this: https://xwalk-renderer.adobeaem.workers.dev/xwalkpages/130360:1272151:1534567d-9937-4e40-85ff-369a8ed45367/main/foobar/about.html
+// Path is like this: https://xwalk-renderer.adobeaem.workers.dev/xwalkpages/p130360--e1272151--1534567d-9937-4e40-85ff-369a8ed45367/main/foobar/about
 function parseXWalkPageFetchUrl(url: string): { siteId: string; pagePath: string } | null {
   try {
     const parsedUrl = new URL(url);
@@ -129,7 +129,7 @@ function parseXWalkPageFetchUrl(url: string): { siteId: string; pagePath: string
     // Site ID is the segment immediately after 'xwalkpages'
     const siteIdSegment = pathSegments[xwalkPageIndex + 1];
     // Extract the UUID part, expected after the last colon if present, or the whole segment
-    const siteIdParts = siteIdSegment.split(':');
+    const siteIdParts = siteIdSegment.split('--');
     const siteId = siteIdParts.length > 0 ? siteIdParts[siteIdParts.length - 1] : ''; // Get the last part
 
     // Validate UUID format for the extracted siteId
