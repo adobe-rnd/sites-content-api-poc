@@ -62,4 +62,41 @@ export function determineProgramIdAndEnvId(headersObject: any): { programId: str
     console.log("X-ADOBE-ROUTING header not found.");
   }
   return { programId, envId };
+}
+
+/**
+ * Extracts the Authorization header value from a headers object.
+ *
+ * @param headersObject An object or Headers instance containing request headers.
+ * @returns The Authorization header value as a string, or null if not found.
+ */
+export function extractAuthorizationHeader(headersObject: any): string | null {
+  let authorizationHeader: string | null = null;
+
+  if (headersObject) {
+    if (typeof headersObject.get === 'function') {
+        // Standard Headers object
+        authorizationHeader = headersObject.get('Authorization') || headersObject.get('authorization');
+    } else if (typeof headersObject === 'object' && headersObject !== null) {
+        // Plain object (case-insensitive lookup)
+        const lowerCaseHeaders: { [key: string]: string } = {};
+        for (const key in headersObject) {
+            if (Object.prototype.hasOwnProperty.call(headersObject, key)) {
+                const value = headersObject[key];
+                lowerCaseHeaders[key.toLowerCase()] = typeof value === 'string' ? value : String(value);
+            }
+        }
+        authorizationHeader = lowerCaseHeaders['authorization'];
+    } else {
+        console.warn("Provided headers object structure is unrecognized. Type:", typeof headersObject);
+    }
+  }
+
+  if (authorizationHeader) {
+      console.log("Found Authorization header.");
+  } else {
+      console.log("Authorization header not found.");
+  }
+
+  return authorizationHeader;
 } 

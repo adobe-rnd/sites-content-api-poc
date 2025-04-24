@@ -1,7 +1,7 @@
 import { OpenAPIRoute, Str, Num, Enumeration } from "chanfana";
 import { z } from "zod";
 import { PaginatedPagesListSchema, ProblemDetailsSchema } from "../schemas";
-import { determineProgramIdAndEnvId } from "utils/request-context";
+import { determineProgramIdAndEnvId, extractAuthorizationHeader } from "utils/request-context";
 import { determineAemSiteNameBySiteId, determinePageInfoByAemSiteNameAndPagePath } from "utils/aem-fetch";
 import { handleErrors } from "utils/aem-fetch";
 import { getAEMContext } from "utils/ctx";
@@ -27,6 +27,7 @@ export class PagesList extends OpenAPIRoute {
       }),
       headers: z.object({
         'X-ADOBE-ROUTING': z.string().describe('Adobe routing information containing program and environment IDs. Example: ...,program=130360,environment=1272151,...'),
+        'AUTHORIZATION': z.string().describe('Authorization header'),
       }),
     },
     responses: {
@@ -55,7 +56,8 @@ export class PagesList extends OpenAPIRoute {
     const { programId, envId } = determineProgramIdAndEnvId(data.headers);
     console.log("programId:", programId);
     console.log("envId:", envId);
-    const ctx = getAEMContext(c.env, programId, envId);
+    const authToken = extractAuthorizationHeader(data.headers);
+    const ctx = getAEMContext(c.env, programId, envId, authToken);
 
     try {
         const aemSiteName = await determineAemSiteNameBySiteId(ctx, siteId);

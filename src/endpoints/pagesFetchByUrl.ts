@@ -8,7 +8,7 @@ import {
 } from "utils/aem-fetch";
 import { getAEMContext } from "../utils/ctx";
 import { PageInfo } from "../PageInfo";
-import { determineProgramIdAndEnvId } from "../utils/request-context";
+import { determineProgramIdAndEnvId, extractAuthorizationHeader } from "../utils/request-context";
 import { Bindings } from "types";
 
 export class PagesFetchByUrl extends OpenAPIRoute {
@@ -22,6 +22,7 @@ export class PagesFetchByUrl extends OpenAPIRoute {
       }),
       headers: z.object({
         'X-ADOBE-ROUTING': z.string().describe('Adobe routing information containing program and environment IDs. Example: ...,program=130360,environment=1272151,...'),
+        'AUTHORIZATION': z.string().describe('Authorization header'),
       }),
     },
     responses: {
@@ -71,9 +72,10 @@ export class PagesFetchByUrl extends OpenAPIRoute {
     const { siteId, pagePath } = xwalkPageDetails;
 
     const { programId, envId } = determineProgramIdAndEnvId(data.headers);
+    const authHeader = extractAuthorizationHeader(data.headers);
     console.log("programId:", programId);
     console.log("envId:", envId);
-    const ctx = getAEMContext(c.env, programId, envId);
+    const ctx = getAEMContext(c.env, programId, envId, authHeader);
     try {
         const aemSiteName = await determineAemSiteNameBySiteId(ctx, siteId);
         console.log("AEM Site Name:", aemSiteName);
