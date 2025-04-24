@@ -1,6 +1,6 @@
 export type Bindings = {
-  AEM_API_KEY: string,
-  WORKER_ENV: string
+  WORKER_ENV: string,
+  AEM_AUTH_TOKEN: string
 }
 
 export type BlockField = { name: string; collapsed: string[] };
