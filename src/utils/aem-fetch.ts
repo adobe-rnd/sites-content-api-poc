@@ -6,13 +6,13 @@ export async function fetchAEMJson<T = any>(
   uuid: string,
   depth: number = 1
 ): Promise<T> {
-  const { host, authToken } = ctx;
+  const { host, authHeader } = ctx;
 
   const url = new URL(`/_jcr_id/${uuid}.${depth}.json`, `https://${host}`);
 
   const response = await fetch(url.toString(), {
     headers: {
-      'Authorization': `Bearer ${authToken}`,
+      'Authorization': authHeader,
       'Content-Type': 'application/json',
     },
   });
@@ -36,13 +36,13 @@ export async function fetchAEMJsonByPath<T = any>(
   path: string,
   depth: number = 1
 ): Promise<T> {
-  const { host, authToken } = ctx;
+  const { host, authHeader } = ctx;
 
   const url = new URL(`/${path}.${depth}.json`, host);
 
   const response = await fetch(url.toString(), {
     headers: {
-      'Authorization': `Bearer ${authToken}`,
+      'Authorization': authHeader,
       'Content-Type': 'application/json',
     },
   });
@@ -67,7 +67,7 @@ export async function determineUuidByPath(
   ctx: AEMContext,
   path: string
 ): Promise<string | null> { // Return type explicitly includes null for 'not found' cases
-  const { host, authToken } = ctx;
+  const { host, authHeader } = ctx;
 
   // Ensure path starts with a slash for consistency, unless it's empty
   const normalizedPath = path && !path.startsWith('/') ? `/${path}` : path;
@@ -77,7 +77,7 @@ export async function determineUuidByPath(
   try {
     const response = await fetch(url.toString(), {
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        'Authorization': authHeader,
         'Content-Type': 'application/json',
       },
     });
@@ -196,7 +196,7 @@ export async function determinePageInfoByAemSiteNameAndPagePath(
   aemSiteName: string,
   pagePath: string
 ): Promise<PageInfo | null> {
-  const { host, authToken } = ctx;
+  const { host, authHeader } = ctx;
 
   // Validate inputs
   if (!aemSiteName) {
@@ -255,8 +255,8 @@ export async function determinePageInfoByAemSiteNameAndPagePath(
   const headers: HeadersInit = {
       'Accept': 'application/json',
   };
-  if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
+  if (authHeader) {
+      headers['Authorization'] = authHeader;
   }
 
   console.log(`Executing QueryBuilder query for site/page UUIDs. Site: ${siteContentPath}, Page: ${fullPagePath}`);
@@ -396,7 +396,7 @@ export async function determineAemSiteNameBySiteId(
     return null;
   }
 
-  const { host, authToken } = ctx;
+  const { host, authHeader } = ctx;
   const queryBuilderUrl = `https://${host}/bin/querybuilder.json`;
 
   // Construct query parameters to find the node by UUID under /content
@@ -412,10 +412,10 @@ export async function determineAemSiteNameBySiteId(
   const headers: HeadersInit = {
       'Accept': 'application/json',
   };
-  if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
+  if (authHeader) {
+      headers['Authorization'] = authHeader;
   }
-
+  console.log('headers', headers);
   console.log(`Executing QueryBuilder query to find path for siteId: ${siteId}`);
   const queryBuilderUrlWithParams = `${queryBuilderUrl}?${queryParams.toString()}`;
 

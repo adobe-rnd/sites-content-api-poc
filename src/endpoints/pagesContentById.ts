@@ -5,7 +5,7 @@ import { Bindings } from "types";
 import { getAEMContext } from "utils/ctx";
 import { fetchAEMJson, handleErrors } from "utils/aem-fetch";
 import { json2html } from "utils/json2html";
-import { determineProgramIdAndEnvId } from "utils/request-context";
+import { determineProgramIdAndEnvId, extractAuthorizationHeader } from "utils/request-context";
 
 export class PagesContentById extends OpenAPIRoute {
   schema = {
@@ -18,6 +18,7 @@ export class PagesContentById extends OpenAPIRoute {
       }),
       headers: z.object({
         'X-ADOBE-ROUTING': z.string().describe('Adobe routing information containing program and environment IDs. Example: ...,program=130360,environment=1272151,...'),
+        'AUTHORIZATION': z.string().describe('Authorization header'),
       }),
     },
     responses: {
@@ -48,7 +49,8 @@ export class PagesContentById extends OpenAPIRoute {
     const data = await this.getValidatedData<typeof this.schema>();
     const { pageId } = data.params;
     const { programId, envId } = determineProgramIdAndEnvId(data.headers);
-    const ctx = getAEMContext(c.env, programId, envId);
+    const authToken = extractAuthorizationHeader(data.headers);
+    const ctx = getAEMContext(c.env, programId, envId, authToken);
     try {
       const page = await fetchAEMJson(ctx, pageId, 7);
       console.log("page", page);
