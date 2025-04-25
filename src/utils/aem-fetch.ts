@@ -6,9 +6,9 @@ export async function fetchAEMJson<T = any>(
   uuid: string,
   depth: number = 1
 ): Promise<T> {
-  const { host, authHeader } = ctx;
+  const { authorHost, publishHost, authHeader } = ctx;
 
-  const url = new URL(`/_jcr_id/${uuid}.${depth}.json`, `https://${host}`);
+  const url = new URL(`/_jcr_id/${uuid}.${depth}.json`, `https://${authorHost}`);
 
   const response = await fetch(url.toString(), {
     headers: {
@@ -36,9 +36,9 @@ export async function fetchAEMJsonByPath<T = any>(
   path: string,
   depth: number = 1
 ): Promise<T> {
-  const { host, authHeader } = ctx;
+  const { authorHost, authHeader } = ctx;
 
-  const url = new URL(`/${path}.${depth}.json`, host);
+  const url = new URL(`/${path}.${depth}.json`, authorHost);
 
   const response = await fetch(url.toString(), {
     headers: {
@@ -67,11 +67,11 @@ export async function determineUuidByPath(
   ctx: AEMContext,
   path: string
 ): Promise<string | null> { // Return type explicitly includes null for 'not found' cases
-  const { host, authHeader } = ctx;
+  const { authorHost, authHeader } = ctx;
 
   // Ensure path starts with a slash for consistency, unless it's empty
   const normalizedPath = path && !path.startsWith('/') ? `/${path}` : path;
-  const url = new URL(`${normalizedPath}.1.json`, `https://${host}`);
+  const url = new URL(`${normalizedPath}.1.json`, `https://${authorHost}`);
 
 
   try {
@@ -196,7 +196,7 @@ export async function determinePageInfoByAemSiteNameAndPagePath(
   aemSiteName: string,
   pagePath: string
 ): Promise<PageInfo | null> {
-  const { host, authHeader } = ctx;
+  const { authorHost, authHeader } = ctx;
 
   // Validate inputs
   if (!aemSiteName) {
@@ -208,7 +208,7 @@ export async function determinePageInfoByAemSiteNameAndPagePath(
       return null;
   }
 
-  const queryBuilderUrl = `https://${host}/bin/querybuilder.json`;
+  const queryBuilderUrl = `https://${authorHost}/bin/querybuilder.json`;
 
   // Normalize pagePath: remove leading slashes and ensure it starts with exactly one slash for concatenation
   let normalizedPagePath = pagePath;
@@ -396,8 +396,8 @@ export async function determineAemSiteNameBySiteId(
     return null;
   }
 
-  const { host, authHeader } = ctx;
-  const queryBuilderUrl = `https://${host}/bin/querybuilder.json`;
+  const { authorHost, authHeader } = ctx;
+  const queryBuilderUrl = `https://${authorHost}/bin/querybuilder.json`;
 
   // Construct query parameters to find the node by UUID under /content
   const queryParams = new URLSearchParams({
