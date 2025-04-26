@@ -30,7 +30,7 @@ It takes the Authorization token and simply forwards it to the AEM instance.
          url: "https://xwalk-renderer-poc.adobeaem.workers.dev/xwalkpages/p<programId>_e<envId>_<UUID of your /content/{siteName}>/main"
          type: "markup"   
    ```
-6. You can then use this Content API Service locally by specifying programId, envId and the token. ProgramId & envId need to be set in the url as well as in the header part:
+7. You can then use this Content API Service locally by specifying programId, envId and the token. ProgramId & envId need to be set in the url as well as in the header part:
 
     ```
     curl -X 'GET' \
@@ -40,7 +40,7 @@ It takes the Authorization token and simply forwards it to the AEM instance.
     -H 'Authorization: Bearer <token>'
     ```
 
-5. When you want to deploy, it to Cloudflare, simply run `wrangler deploy` to publish the API to Cloudflare Workers.
+8. When you want to deploy, it to Cloudflare, simply run `wrangler deploy` to publish the API to Cloudflare Workers.
 
 ## Project structure
 
