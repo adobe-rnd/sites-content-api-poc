@@ -30,7 +30,7 @@ It takes the Authorization token and simply forwards it to the AEM instance.
          url: "https://xwalk-renderer-poc.adobeaem.workers.dev/xwalkpages/p<programId>_e<envId>_<UUID of your /content/{siteName}>/main"
          type: "markup"   
    ```
-6. You can then use this Content API Service locally by specifying programIdspecify this token in an Authorization Header as a Bearer token, like so:
+6. You can then use this Content API Service locally by specifying programId, envId and the token. ProgramId & envId need to be set in the url as well as in the header part:
 
     ```
     curl -X 'GET' \
