@@ -7,7 +7,7 @@ This project implements a Proof-of-Concept (PoC) for a Content API focusing on s
 
 The primary goal of this PoC is to demonstrate the feasibility of offloading the HTML rendering by reading the Crosswalk specific JCR. This is done by implementing a [Cloudflare Worker](https://workers.cloudflare.com/).
 
-A related Cloudflare Worker responsible for the translation of the external Helix Path into the Content API Path can be found in the `xwalk-renderer-poc` repository.
+A related Cloudflare Worker responsible for the translation of the external Helix Path into the Content API Path can be found in the [`xwalk-renderer-poc`](https://github.com/adobe-rnd/xwalk-renderer-poc) repository.
 
 This API sits behind the Adobe API Router and handles the endpoints:
 * `author-p{programId}-e{envId}.adobeaemcloud.com/adobe/sites`
